@@ -1,0 +1,6 @@
+{
+  "name": "Touros Burguer",
+  "description": "Touros Burguer — Respeita essa fome. Desde 2020, alimentando sua vontade de comer bem em Goiânia.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
