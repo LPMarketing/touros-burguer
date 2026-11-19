@@ -40,15 +40,15 @@ export function IntroAnimation({ onComplete }: IntroAnimationProps) {
       return () => window.clearTimeout(safetyTimer);
     }
 
-    const t1 = window.setTimeout(() => setScene(2), 950);
-    const t2 = window.setTimeout(() => setScene(3), 2050);
+    const t1 = window.setTimeout(() => setScene(2), 750);
+    const t2 = window.setTimeout(() => setScene(3), 2150);
     const t3 = window.setTimeout(() => {
       setScene(4);
       setIsSweeping(true);
-    }, 3150);
+    }, 3250);
     const t4 = window.setTimeout(() => {
       finishIntro();
-    }, 3750);
+    }, 3850);
 
     return () => {
       window.clearTimeout(t1);

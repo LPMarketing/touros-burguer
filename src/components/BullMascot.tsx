@@ -21,54 +21,90 @@ const EMBERS = [
 export function BullMascot({ scene }: BullMascotProps) {
   const [imgError, setImgError] = useState(false);
 
-  // Smooth, realistic camera choreography over a single cohesive 3D CGI asset
-  // Scene 1: Dramatic reveal out of shadow
-  // Scene 2: Smooth push-in toward burger & chest crest
-  // Scene 3: Heroic pull-back with golden rim-light sweep
-  const cameraAnimate =
+  const isEatScene = scene === 2;
+  const isOkScene = scene >= 3;
+
+  const cameraTransform =
     scene === 1
-      ? { scale: 1.03, y: 0 }
+      ? { scale: 1.02, y: 0 }
       : scene === 2
-        ? { scale: 1.15, y: -12 }
-        : { scale: 1.01, y: 0 };
+        ? { scale: 1.13, y: -8 }
+        : { scale: 1.0, y: 0 };
 
   return (
     <motion.div
-      className="relative w-[290px] h-[290px] min-[390px]:w-[330px] min-[390px]:h-[330px] sm:w-[376px] sm:h-[376px] select-none"
-      initial={{ opacity: 0, scale: 1.16 }}
-      animate={{ opacity: 1, scale: 1 }}
-      transition={{ duration: 0.65, ease: [0.16, 1, 0.3, 1] }}
+      className="relative w-[290px] h-[290px] min-[390px]:w-[332px] min-[390px]:h-[332px] sm:w-[380px] sm:h-[380px] select-none"
+      initial={{ opacity: 0, scale: 1.14 }}
+      animate={{
+        opacity: 1,
+        scale: 1,
+        x: isEatScene ? [0, -2.5, 2.5, -1, 0] : 0,
+      }}
+      transition={{
+        opacity: { duration: 0.45, ease: 'easeOut' },
+        scale: { duration: 0.65, ease: [0.16, 1, 0.3, 1] },
+        x: { duration: 0.35, delay: 0.15, ease: 'easeOut' },
+      }}
     >
       {/* Warm Golden Rim Aura behind CGI Bull */}
       <motion.div
         className="absolute -inset-4 rounded-full pointer-events-none"
         animate={{
-          opacity: scene >= 3 ? 0.95 : 0.65,
-          scale: scene === 2 ? 1.08 : 1,
+          opacity: isOkScene ? 0.95 : isEatScene ? 0.88 : 0.65,
+          scale: isEatScene ? 1.08 : 1,
         }}
-        transition={{ duration: 0.8, ease: 'easeOut' }}
+        transition={{ duration: 0.65, ease: 'easeOut' }}
         style={{
           background:
-            'radial-gradient(circle at 50% 44%, rgba(255, 208, 0, 0.22) 0%, rgba(255, 132, 0, 0.08) 46%, transparent 72%)',
+            'radial-gradient(circle at 50% 44%, rgba(255, 208, 0, 0.24) 0%, rgba(255, 132, 0, 0.08) 46%, transparent 72%)',
         }}
         aria-hidden="true"
       />
 
-      {/* Feathered Studio Frame so edges melt seamlessly into #080808 */}
+      {/* Feathered Studio Frame melting seamlessly into #080808 */}
       <div className="relative w-full h-full overflow-hidden rounded-full sm:rounded-3xl">
         <motion.div
-          className="w-full h-full will-change-transform"
-          animate={cameraAnimate}
-          transition={{ duration: 0.95, ease: [0.16, 1, 0.3, 1] }}
+          className="relative w-full h-full will-change-transform"
+          animate={cameraTransform}
+          transition={{ duration: 0.78, ease: [0.16, 1, 0.3, 1] }}
         >
           {!imgError ? (
-            <img
-              src={siteConfig.media.introBullImageSrc}
-              alt="Mascote 3D realista da Touros Burguer segurando um hambúrguer gourmet"
-              referrerPolicy="no-referrer"
-              onError={() => setImgError(true)}
-              className="w-full h-full object-cover object-center"
-            />
+            <>
+              {/* Frame 1: Holding Gourmet Burger */}
+              <motion.img
+                src={siteConfig.media.introBullHoldSrc}
+                alt="Touro realista segurando o hambúrguer gourmet"
+                referrerPolicy="no-referrer"
+                onError={() => setImgError(true)}
+                animate={{ opacity: scene === 1 ? 1 : 0 }}
+                transition={{ duration: 0.32, ease: 'easeInOut' }}
+                className="absolute inset-0 w-full h-full object-cover object-center"
+              />
+
+              {/* Frame 2: Actively Taking a Huge Bite of the Burger */}
+              <motion.img
+                src={siteConfig.media.introBullEatSrc}
+                alt="Touro realista mordendo e comendo o hambúrguer gourmet"
+                referrerPolicy="no-referrer"
+                onError={() => setImgError(true)}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: isEatScene ? 1 : 0 }}
+                transition={{ duration: 0.32, ease: 'easeInOut' }}
+                className="absolute inset-0 w-full h-full object-cover object-center"
+              />
+
+              {/* Frame 3: Satisfied Grin & OK Approval */}
+              <motion.img
+                src={siteConfig.media.introBullOkSrc}
+                alt="Touro realista satisfeito fazendo sinal de aprovação"
+                referrerPolicy="no-referrer"
+                onError={() => setImgError(true)}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: isOkScene ? 1 : 0 }}
+                transition={{ duration: 0.35, ease: 'easeInOut' }}
+                className="absolute inset-0 w-full h-full object-cover object-center"
+              />
+            </>
           ) : (
             <div className="w-full h-full flex items-center justify-center bg-[#141413]">
               <BrandMark className="w-20 h-20" />
@@ -81,17 +117,17 @@ export function BullMascot({ scene }: BullMascotProps) {
           className="pointer-events-none absolute inset-0"
           style={{
             background:
-              'radial-gradient(circle at 50% 46%, transparent 48%, rgba(8, 8, 8, 0.65) 72%, #080808 96%)',
+              'radial-gradient(circle at 50% 46%, transparent 50%, rgba(8, 8, 8, 0.65) 74%, #080808 97%)',
           }}
           aria-hidden="true"
         />
 
-        {/* Subtle Specular Golden Sweep across scene 2->3 */}
+        {/* Specular Golden Light Sweep across Approval Scene */}
         <motion.div
-          className="pointer-events-none absolute inset-y-0 w-28 -skew-x-12 bg-gradient-to-r from-transparent via-[#FFD000]/20 to-transparent"
+          className="pointer-events-none absolute inset-y-0 w-28 -skew-x-12 bg-gradient-to-r from-transparent via-[#FFD000]/22 to-transparent"
           initial={{ x: '-140%' }}
-          animate={{ x: scene >= 2 ? '420%' : '-140%' }}
-          transition={{ duration: 1.15, ease: [0.22, 1, 0.36, 1] }}
+          animate={{ x: isOkScene ? '420%' : '-140%' }}
+          transition={{ duration: 1.0, ease: [0.22, 1, 0.36, 1] }}
           aria-hidden="true"
         />
       </div>

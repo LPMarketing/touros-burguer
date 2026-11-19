@@ -29,7 +29,9 @@ export const siteConfig = {
   media: {
     logoSrc: '/assets/aistudio/logo_touros_b7e768ce.png',
     heroBurgerSrc: '/assets/aistudio/Touros_Burguer_ao_entardecer_019752f9.png',
-    introBullImageSrc: '/src/assets/images/touro_burguer_cgi_1795050606546.jpg',
+    introBullHoldSrc: '/src/assets/images/touro_burguer_cgi_1795050606546.jpg',
+    introBullEatSrc: '/src/assets/images/touro_comendo_lanche_1795050865868.jpg',
+    introBullOkSrc: '/src/assets/images/touro_aprovacao_ok_1795050865146.jpg',
     locationPhotoSrc: '',
     introVideoWebmSrc: '',
     introVideoMp4Src: '',
