@@ -36,115 +36,108 @@ export function IntroAnimation({ onComplete }: IntroAnimationProps) {
       const safetyTimer = window.setTimeout(() => {
         setIsSweeping(true);
         window.setTimeout(finishIntro, 420);
-      }, 4500);
+      }, 4600);
       return () => window.clearTimeout(safetyTimer);
     }
 
-    const t1 = window.setTimeout(() => setScene(2), 750);
-    const t2 = window.setTimeout(() => setScene(3), 2150);
-    const t3 = window.setTimeout(() => {
-      setScene(4);
+    const sweepTimer = window.setTimeout(() => {
+      setScene(5);
       setIsSweeping(true);
-    }, 3250);
-    const t4 = window.setTimeout(() => {
+    }, 3550);
+
+    const completeTimer = window.setTimeout(() => {
       finishIntro();
-    }, 3850);
+    }, 4150);
 
     return () => {
-      window.clearTimeout(t1);
-      window.clearTimeout(t2);
-      window.clearTimeout(t3);
-      window.clearTimeout(t4);
+      window.clearTimeout(sweepTimer);
+      window.clearTimeout(completeTimer);
     };
   }, [finishIntro, hasCustomVideo, videoFailed]);
 
   return (
     <motion.div
-      className="fixed inset-0 h-[100dvh] z-50 flex flex-col items-center justify-center bg-[#080808] overflow-hidden select-none"
+      className="fixed inset-0 h-[100dvh] z-50 bg-[#080808] overflow-hidden select-none"
       initial={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
-      aria-label="Introdução Touros Burguer"
+      aria-label="Introdução 3D Touros Burguer"
     >
-      {/* Subtle studio floor vignette */}
-      <div
-        className="pointer-events-none absolute inset-0"
-        style={{
-          background:
-            'radial-gradient(circle at 50% 46%, rgba(255, 208, 0, 0.08) 0%, rgba(8, 8, 8, 0.94) 68%)',
-        }}
-        aria-hidden="true"
-      />
+      {/* Full-Viewport Open 3D Stage (no circular box) */}
+      <div className="absolute inset-0 w-full h-full">
+        {hasCustomVideo && !videoFailed ? (
+          <div className="w-full h-full flex items-center justify-center">
+            <video
+              className="w-full max-w-md h-auto object-contain"
+              autoPlay
+              muted
+              playsInline
+              onEnded={() => {
+                setIsSweeping(true);
+                window.setTimeout(finishIntro, 420);
+              }}
+              onError={() => setVideoFailed(true)}
+            >
+              {siteConfig.media.introVideoWebmSrc && (
+                <source src={siteConfig.media.introVideoWebmSrc} type="video/webm" />
+              )}
+              {siteConfig.media.introVideoMp4Src && (
+                <source src={siteConfig.media.introVideoMp4Src} type="video/mp4" />
+              )}
+            </video>
+          </div>
+        ) : (
+          <BullMascot onSceneChange={setScene} />
+        )}
+      </div>
 
-      {/* Discreet Skip Button */}
+      {/* Discreet Skip Button (solid surface without backdrop-blur over WebGL) */}
       <motion.button
         type="button"
         onClick={handleSkip}
         whileTap={{ scale: 0.95 }}
-        className="fixed top-4 right-4 z-50 min-h-[44px] px-4 py-2 rounded-lg text-xs font-semibold tracking-wider uppercase text-[#A5A5A5] hover:text-white bg-[#141413]/85 border border-white/10 backdrop-blur-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FFD000]"
+        className="fixed top-4 right-4 z-50 min-h-[44px] px-4 py-2 rounded-lg text-xs font-semibold tracking-wider uppercase text-[#A5A5A5] hover:text-white bg-[#141413]/95 border border-white/15 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FFD000]"
         style={{ marginTop: 'env(safe-area-inset-top)' }}
       >
         Pular introdução
       </motion.button>
 
-      {/* Main Intro Stage */}
-      <div className="relative z-10 flex flex-col items-center justify-center w-full max-w-md px-6">
-        {hasCustomVideo && !videoFailed ? (
-          <video
-            className="w-72 h-72 sm:w-80 sm:h-80 object-contain"
-            autoPlay
-            muted
-            playsInline
-            onEnded={() => {
-              setIsSweeping(true);
-              window.setTimeout(finishIntro, 420);
-            }}
-            onError={() => setVideoFailed(true)}
-          >
-            {siteConfig.media.introVideoWebmSrc && (
-              <source src={siteConfig.media.introVideoWebmSrc} type="video/webm" />
-            )}
-            {siteConfig.media.introVideoMp4Src && (
-              <source src={siteConfig.media.introVideoMp4Src} type="video/mp4" />
-            )}
-          </video>
+      {/* Bottom Brand Signature & Thin Progress Line */}
+      <motion.div
+        className="pointer-events-none fixed inset-x-0 bottom-0 z-20 flex flex-col items-center pb-8 pt-12 px-6"
+        style={{
+          paddingBottom: 'max(2rem, env(safe-area-inset-bottom))',
+          background:
+            'linear-gradient(to top, rgba(8, 8, 8, 0.95) 0%, rgba(8, 8, 8, 0.55) 55%, transparent 100%)',
+        }}
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, delay: 0.15, ease: [0.16, 1, 0.3, 1] }}
+      >
+        {!logoError ? (
+          <img
+            src={siteConfig.media.logoSrc}
+            alt="Touros Burguer"
+            referrerPolicy="no-referrer"
+            onError={() => setLogoError(true)}
+            className="w-36 min-[390px]:w-40 sm:w-44 h-auto object-contain"
+          />
         ) : (
-          <BullMascot scene={scene} />
+          <p className="font-display text-2xl sm:text-3xl tracking-wider text-white">
+            TOUROS <span className="text-[#FFD000]">BURGUER</span>
+          </p>
         )}
 
-        {/* Official Logo Staging + Cinematic Progress Line */}
-        <motion.div
-          className="mt-2 flex flex-col items-center"
-          initial={{ opacity: 0, y: 12, scale: 0.94 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          transition={{ duration: 0.55, delay: 0.14, ease: [0.16, 1, 0.3, 1] }}
-        >
-          {!logoError ? (
-            <img
-              src={siteConfig.media.logoSrc}
-              alt="Touros Burguer"
-              referrerPolicy="no-referrer"
-              onError={() => setLogoError(true)}
-              className="w-40 min-[390px]:w-44 sm:w-48 h-auto object-contain drop-shadow-[0_10px_24px_rgba(0,0,0,0.85)]"
-            />
-          ) : (
-            <p className="font-display text-2xl sm:text-3xl tracking-wider text-white">
-              TOUROS <span className="text-[#FFD000]">BURGUER</span>
-            </p>
-          )}
-
-          {/* Sleek 2px Progress Bar */}
-          <div className="mt-3.5 w-32 h-[2px] rounded-full bg-white/10 overflow-hidden">
-            <motion.div
-              className="h-full bg-[#FFD000]"
-              initial={{ scaleX: 0 }}
-              animate={{ scaleX: 1 }}
-              transition={{ duration: 3.15, ease: 'linear' }}
-              style={{ originX: 0 }}
-            />
-          </div>
-        </motion.div>
-      </div>
+        <div className="mt-3 w-36 h-[2px] rounded-full bg-white/15 overflow-hidden">
+          <motion.div
+            className="h-full bg-[#FFD000]"
+            initial={{ scaleX: 0 }}
+            animate={{ scaleX: scene >= 5 ? 1 : 1 }}
+            transition={{ duration: 3.55, ease: 'linear' }}
+            style={{ originX: 0 }}
+          />
+        </div>
+      </motion.div>
 
       {/* Staggered Diagonal Brand Slash Transition */}
       <AnimatePresence>
