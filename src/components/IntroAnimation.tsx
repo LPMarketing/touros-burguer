@@ -40,16 +40,23 @@ export function IntroAnimation({ onComplete }: IntroAnimationProps) {
       return () => window.clearTimeout(safetyTimer);
     }
 
+    const t2 = window.setTimeout(() => setScene(2), 820);
+    const t3 = window.setTimeout(() => setScene(3), 1820);
+    const t4 = window.setTimeout(() => setScene(4), 2750);
+
     const sweepTimer = window.setTimeout(() => {
       setScene(5);
       setIsSweeping(true);
-    }, 3550);
+    }, 3450);
 
     const completeTimer = window.setTimeout(() => {
       finishIntro();
-    }, 4150);
+    }, 4020);
 
     return () => {
+      window.clearTimeout(t2);
+      window.clearTimeout(t3);
+      window.clearTimeout(t4);
       window.clearTimeout(sweepTimer);
       window.clearTimeout(completeTimer);
     };
@@ -61,9 +68,9 @@ export function IntroAnimation({ onComplete }: IntroAnimationProps) {
       initial={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
-      aria-label="Introdução 3D Touros Burguer"
+      aria-label="Introdução Touros Burguer"
     >
-      {/* Full-Viewport Open 3D Stage (no circular box) */}
+      {/* Full-Viewport Animated Mascot Stage */}
       <div className="absolute inset-0 w-full h-full">
         {hasCustomVideo && !videoFailed ? (
           <div className="w-full h-full flex items-center justify-center">
@@ -87,11 +94,11 @@ export function IntroAnimation({ onComplete }: IntroAnimationProps) {
             </video>
           </div>
         ) : (
-          <BullMascot onSceneChange={setScene} />
+          <BullMascot scene={scene} />
         )}
       </div>
 
-      {/* Discreet Skip Button (solid surface without backdrop-blur over WebGL) */}
+      {/* Discreet Skip Button */}
       <motion.button
         type="button"
         onClick={handleSkip}
@@ -132,8 +139,8 @@ export function IntroAnimation({ onComplete }: IntroAnimationProps) {
           <motion.div
             className="h-full bg-[#FFD000]"
             initial={{ scaleX: 0 }}
-            animate={{ scaleX: scene >= 5 ? 1 : 1 }}
-            transition={{ duration: 3.55, ease: 'linear' }}
+            animate={{ scaleX: 1 }}
+            transition={{ duration: 3.45, ease: 'linear' }}
             style={{ originX: 0 }}
           />
         </div>
