@@ -1,6 +1,7 @@
 export const MENU_URL = '';
 
-const WHATSAPP_NUMBER = '556298165295';
+const WHATSAPP_PRIMARY_NUMBER = '556296780208';
+const WHATSAPP_SECONDARY_NUMBER = '556298165295';
 const WHATSAPP_MESSAGE =
   'Olá! Vim pelo site do Touros Burguer e gostaria de mais informações.';
 
@@ -9,13 +10,23 @@ export const siteConfig = {
   slogan: 'RESPEITA ESSA FOME.',
   sinceText: 'Desde 2020, alimentando sua vontade de comer bem.',
   menuUrl: MENU_URL,
-  ifoodUrl:
-    'https://www.ifood.com.br/delivery/goiania-go/touros-burguers-setor-cristina/5860fa02-1466-439e-b510-e425e1f91304',
-  food99Url:
-    'https://h5.didiglobal.com/silver-bullet-online/8FTSBVvN4wxCUanV-UY0W?ddlCode=msAVvY&area=BR&lang=pt-BR&appKey=dlp9&redirectType=0&params=',
-  whatsapp: WHATSAPP_NUMBER,
   whatsappMessage: WHATSAPP_MESSAGE,
-  whatsappUrl: `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(WHATSAPP_MESSAGE)}`,
+  whatsappChannels: [
+    {
+      id: 'whatsapp-1',
+      title: 'WHATSAPP 1',
+      displayNumber: '(62) 9678-0208',
+      number: WHATSAPP_PRIMARY_NUMBER,
+      url: `https://wa.me/${WHATSAPP_PRIMARY_NUMBER}?text=${encodeURIComponent(WHATSAPP_MESSAGE)}`,
+    },
+    {
+      id: 'whatsapp-2',
+      title: 'WHATSAPP 2',
+      displayNumber: '(62) 9816-5295',
+      number: WHATSAPP_SECONDARY_NUMBER,
+      url: `https://wa.me/${WHATSAPP_SECONDARY_NUMBER}?text=${encodeURIComponent(WHATSAPP_MESSAGE)}`,
+    },
+  ],
   instagramHandle: '@touros_burguer',
   instagramUrl: 'https://www.instagram.com/touros_burguer/',
   locationTitle: 'A FOME TE TROUXE ATÉ AQUI?',
@@ -26,9 +37,11 @@ export const siteConfig = {
   mapsUrl:
     'https://www.google.com/maps/place/Touros+Burguer/@-16.7640225,-49.3505396,20z/data=!4m6!3m5!1s0x935ef7cd63f2b469:0xacda37c9cbce9d96!8m2!3d-16.7639882!4d-49.3508144!16s%2Fg%2F11m38vqt5_',
   copyright: 'TOUROS BURGUER © 2026',
+  clicaeUrl: 'https://www.instagram.com/clicaebio/',
   media: {
     logoSrc: '/assets/aistudio/logo_touros_b7e768ce.png',
     heroBurgerSrc: '/assets/aistudio/Touros_Burguer_ao_entardecer_019752f9.png',
+    clicaeLogoSrc: '/assets/aistudio/WhatsApp_Image_2026-11-17_at_22.41.29_be5d0219.jpeg',
     locationPhotoSrc: '',
     introVideoWebmSrc: '',
     introVideoMp4Src: '',

@@ -17,6 +17,15 @@ export function InstagramFooter() {
       <p className="text-[11px] font-semibold tracking-[0.18em] text-[#A5A5A5]/65 uppercase">
         {siteConfig.copyright}
       </p>
+
+      <a
+        href={siteConfig.clicaeUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-[11px] font-medium text-[#A5A5A5]/60 hover:text-[#FFD000] transition-colors duration-150 py-1 px-2 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FFD000]"
+      >
+        Produzido por Clicaê Bio
+      </a>
     </footer>
   );
 }

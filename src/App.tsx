@@ -5,6 +5,7 @@ import { IntroAnimation } from './components/IntroAnimation';
 import { HeroSection } from './components/HeroSection';
 import { LinksSection } from './components/LinksSection';
 import { LocationSection } from './components/LocationSection';
+import { ClicaePromoCard } from './components/ClicaePromoCard';
 import { InstagramFooter } from './components/InstagramFooter';
 
 function getInitialReducedMotion(): boolean {
@@ -70,10 +71,13 @@ export default function App() {
             <HeroSection ready={contentReady} reducedMotion={reducedMotion} />
           </div>
 
-          {/* Right Column: Action Links + Location Experience */}
+          {/* Right Column: Action Links + Location Experience + Clicaê Promo */}
           <div className="lg:col-span-7 space-y-8 sm:space-y-10 lg:pt-2">
             <LinksSection ready={contentReady} reducedMotion={reducedMotion} />
-            <LocationSection reducedMotion={reducedMotion} />
+            <div>
+              <LocationSection reducedMotion={reducedMotion} />
+              <ClicaePromoCard />
+            </div>
           </div>
         </div>
 
