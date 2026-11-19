@@ -2,6 +2,18 @@ import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { BrandMark } from './BrandMark';
+import { createBullTexturePack } from '../three/proceduralTextures';
+import {
+  createSculptedBullHeadGeometry,
+  createSculptedNosePadGeometry,
+  createSculptedJawGeometry,
+  createSculptedTorsoGeometry,
+  createMuscularLimbGeometry,
+  createSculptedEarGeometry,
+  createTaperedHornGeometry,
+  createStylizedHand,
+} from '../three/sculptedGeometry';
+import { createBiteableBurger } from '../three/biteableBurger';
 
 export type IntroScene = 1 | 2 | 3 | 4 | 5;
 
@@ -21,242 +33,154 @@ interface CrumbParticle {
   active: boolean;
 }
 
+// Pre-allocated math temporaries (zero per-frame heap allocations)
 const _tmpVec = new THREE.Vector3();
+const _downY = new THREE.Vector3(0, -1, 0);
+const _st = new THREE.Vector3();
+const _dir = new THREE.Vector3();
+const _perp = new THREE.Vector3();
+const _elbow = new THREE.Vector3();
+const _uDir = new THREE.Vector3();
+const _fDir = new THREE.Vector3();
+const _shoulderL = new THREE.Vector3(-0.76, 0.44, 0.02);
+const _shoulderR = new THREE.Vector3(0.76, 0.44, 0.02);
+const _poleL = new THREE.Vector3(-0.85, -0.52, -0.45).normalize();
+const _poleR = new THREE.Vector3(0.85, -0.52, -0.45).normalize();
+const _handTargetL = new THREE.Vector3();
+const _handTargetR = new THREE.Vector3();
+const _currentHandL = new THREE.Vector3(-0.39, -0.04, 0.88);
+const _currentHandR = new THREE.Vector3(0.39, -0.04, 0.88);
 
-function createTaperedHornGeometry(
-  curve: THREE.CatmullRomCurve3,
-  tubularSegments = 28,
-  radialSegments = 14,
-  baseRadius = 0.145,
-  tipRadius = 0.018
-): THREE.BufferGeometry {
-  const frames = curve.computeFrenetFrames(tubularSegments, false);
-  const positions: number[] = [];
-  const normals: number[] = [];
-  const uvs: number[] = [];
-  const indices: number[] = [];
+function createSculptedEyeballGeometry(radius = 0.092): THREE.BufferGeometry {
+  const geo = new THREE.SphereGeometry(radius, 28, 22);
+  const pos = geo.attributes.position;
+  const uv = geo.attributes.uv;
 
-  for (let i = 0; i <= tubularSegments; i++) {
-    const t = i / tubularSegments;
-    const point = curve.getPointAt(t);
-    const N = frames.normals[i];
-    const B = frames.binormals[i];
-    // Smooth organic taper from thick base to sharp tip
-    const radius = THREE.MathUtils.lerp(baseRadius, tipRadius, Math.pow(t, 0.82));
-
-    for (let j = 0; j <= radialSegments; j++) {
-      const v = (j / radialSegments) * Math.PI * 2;
-      const sin = Math.sin(v);
-      const cos = -Math.cos(v);
-
-      const nx = cos * N.x + sin * B.x;
-      const ny = cos * N.y + sin * B.y;
-      const nz = cos * N.z + sin * B.z;
-
-      normals.push(nx, ny, nz);
-      positions.push(point.x + radius * nx, point.y + radius * ny, point.z + radius * nz);
-      uvs.push(t, j / radialSegments);
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i);
+    const y = pos.getY(i);
+    const z = pos.getZ(i);
+    if (z > -0.015) {
+      // Planar front projection onto the +Z cornea so iris & studio catchlights are crisp and circular
+      const u = THREE.MathUtils.clamp(0.5 + (x / (radius * 1.48)) * 0.5, 0.02, 0.98);
+      const v = THREE.MathUtils.clamp(0.5 + (y / (radius * 1.48)) * 0.5, 0.02, 0.98);
+      uv.setXY(i, u, v);
+    } else {
+      // Pure sclera white area in eye texture
+      uv.setXY(i, 0.03, 0.03);
     }
   }
-
-  for (let i = 0; i < tubularSegments; i++) {
-    for (let j = 0; j < radialSegments; j++) {
-      const a = i * (radialSegments + 1) + j;
-      const b = (i + 1) * (radialSegments + 1) + j;
-      const c = (i + 1) * (radialSegments + 1) + (j + 1);
-      const d = i * (radialSegments + 1) + (j + 1);
-
-      indices.push(a, b, d);
-      indices.push(b, c, d);
-    }
-  }
-
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-  geo.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
-  geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
-  geo.setIndex(indices);
+  uv.needsUpdate = true;
   return geo;
 }
 
-function createApronCrestTexture(): THREE.CanvasTexture {
-  const canvas = document.createElement('canvas');
-  canvas.width = 256;
-  canvas.height = 256;
-  const ctx = canvas.getContext('2d');
-  if (ctx) {
-    ctx.clearRect(0, 0, 256, 256);
-    // Subtle dark leather badge backdrop
-    ctx.fillStyle = '#141413';
-    ctx.beginPath();
-    ctx.arc(128, 128, 108, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.strokeStyle = '#FFD000';
-    ctx.lineWidth = 8;
-    ctx.beginPath();
-    ctx.arc(128, 128, 98, 0, Math.PI * 2);
-    ctx.stroke();
-
-    // Stylized fierce Touros bull silhouette
-    ctx.fillStyle = '#FFD000';
-    ctx.beginPath();
-    ctx.moveTo(64, 72);
-    ctx.quadraticCurveTo(56, 114, 88, 124);
-    ctx.lineTo(82, 174);
-    ctx.quadraticCurveTo(86, 198, 128, 198);
-    ctx.quadraticCurveTo(170, 198, 174, 174);
-    ctx.lineTo(168, 124);
-    ctx.quadraticCurveTo(200, 114, 192, 72);
-    ctx.quadraticCurveTo(174, 100, 148, 102);
-    ctx.lineTo(108, 102);
-    ctx.quadraticCurveTo(82, 100, 64, 72);
-    ctx.closePath();
-    ctx.fill();
-
-    ctx.fillStyle = '#141413';
-    ctx.beginPath();
-    ctx.arc(106, 142, 8, 0, Math.PI * 2);
-    ctx.arc(150, 142, 8, 0, Math.PI * 2);
-    ctx.fill();
+function createTeethArc(teethMat: THREE.Material, count: number, radius: number, invert = false): THREE.Group {
+  const group = new THREE.Group();
+  const toothGeo = new THREE.CapsuleGeometry(0.021, 0.024, 6, 10);
+  for (let i = 0; i < count; i++) {
+    const frac = count === 1 ? 0.5 : i / (count - 1);
+    const angle = THREE.MathUtils.lerp(-0.85, 0.85, frac);
+    const tooth = new THREE.Mesh(toothGeo, teethMat);
+    tooth.position.set(
+      Math.sin(angle) * radius,
+      invert ? -0.005 : 0.005,
+      Math.cos(angle) * radius * 0.86
+    );
+    tooth.scale.set(1.15, 0.95, 0.72);
+    group.add(tooth);
   }
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  return tex;
+  return group;
 }
 
-function createFurBumpTexture(): THREE.CanvasTexture {
-  const canvas = document.createElement('canvas');
-  canvas.width = 256;
-  canvas.height = 256;
-  const ctx = canvas.getContext('2d');
-  if (ctx) {
-    ctx.fillStyle = '#808080';
-    ctx.fillRect(0, 0, 256, 256);
-    for (let i = 0; i < 1800; i++) {
-      const x = Math.random() * 256;
-      const y = Math.random() * 256;
-      const len = 5 + Math.random() * 10;
-      const v = Math.floor(95 + Math.random() * 80);
-      ctx.strokeStyle = `rgb(${v},${v},${v})`;
-      ctx.lineWidth = 1.3;
-      ctx.beginPath();
-      ctx.moveTo(x, y);
-      ctx.lineTo(x + (Math.random() - 0.5) * 3, y + len);
-      ctx.stroke();
-    }
-  }
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.wrapS = THREE.RepeatWrapping;
-  tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(3, 3);
-  return tex;
+function createCurvedEyebrow(side: 'left' | 'right', mat: THREE.Material): THREE.Group {
+  const s = side === 'left' ? -1 : 1;
+  const pivot = new THREE.Group();
+
+  const curve = new THREE.CatmullRomCurve3([
+    new THREE.Vector3(s * -0.09, -0.015, 0.01),
+    new THREE.Vector3(0, 0.032, 0.03),
+    new THREE.Vector3(s * 0.095, 0.01, -0.01),
+  ]);
+  const tubeGeo = new THREE.TubeGeometry(curve, 16, 0.026, 10, false);
+  const tube = new THREE.Mesh(tubeGeo, mat);
+  tube.castShadow = true;
+  pivot.add(tube);
+
+  const capGeo = new THREE.SphereGeometry(0.025, 10, 8);
+  const startCap = new THREE.Mesh(capGeo, mat);
+  startCap.position.set(s * -0.09, -0.015, 0.01);
+  const endCap = new THREE.Mesh(capGeo, mat);
+  endCap.position.set(s * 0.095, 0.01, -0.01);
+  pivot.add(startCap, endCap);
+
+  return pivot;
 }
 
-function createContactShadowTexture(): THREE.CanvasTexture {
-  const canvas = document.createElement('canvas');
-  canvas.width = 256;
-  canvas.height = 256;
-  const ctx = canvas.getContext('2d');
-  if (ctx) {
-    const grad = ctx.createRadialGradient(128, 128, 10, 128, 128, 124);
-    grad.addColorStop(0, 'rgba(0, 0, 0, 0.85)');
-    grad.addColorStop(0.55, 'rgba(0, 0, 0, 0.35)');
-    grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, 256, 256);
-  }
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  return tex;
-}
-
-function buildBurgerWedge(
-  thetaStart: number,
-  thetaLength: number,
-  mats: {
-    bunTop: THREE.Material;
-    bunBottom: THREE.Material;
-    patty: THREE.Material;
-    cheese: THREE.Material;
-    lettuce: THREE.Material;
-    bacon: THREE.Material;
-    sesame: THREE.Material;
-  }
-): THREE.Group {
-  const wedge = new THREE.Group();
-  const r = 0.43;
-
-  // Bottom brioche bun slice
-  const botGeo = new THREE.CylinderGeometry(r * 0.96, r * 0.92, 0.11, 20, 1, false, thetaStart, thetaLength);
-  const bot = new THREE.Mesh(botGeo, mats.bunBottom);
-  bot.position.y = -0.14;
-  bot.castShadow = true;
-  wedge.add(bot);
-
-  // Thick seared beef patty slice
-  const pattyGeo = new THREE.CylinderGeometry(r * 1.02, r * 1.02, 0.13, 20, 1, false, thetaStart, thetaLength);
-  const patty = new THREE.Mesh(pattyGeo, mats.patty);
-  patty.position.y = -0.02;
-  patty.castShadow = true;
-  wedge.add(patty);
-
-  // Melted cheddar layer + overhang drips
-  const cheeseGeo = new THREE.CylinderGeometry(r * 1.05, r * 1.03, 0.045, 20, 1, false, thetaStart, thetaLength);
-  const cheese = new THREE.Mesh(cheeseGeo, mats.cheese);
-  cheese.position.y = 0.065;
-  wedge.add(cheese);
-
-  const midAngle = thetaStart + thetaLength * 0.5;
-  const dripGeo = new THREE.ConeGeometry(0.065, 0.14, 10);
-  const drip = new THREE.Mesh(dripGeo, mats.cheese);
-  drip.position.set(Math.sin(midAngle) * r * 0.98, 0.01, Math.cos(midAngle) * r * 0.98);
-  drip.rotation.x = Math.PI;
-  wedge.add(drip);
-
-  // Crispy bacon slab
-  const baconGeo = new THREE.CylinderGeometry(r * 0.97, r * 0.97, 0.036, 18, 1, false, thetaStart, thetaLength);
-  const bacon = new THREE.Mesh(baconGeo, mats.bacon);
-  bacon.position.y = 0.105;
-  wedge.add(bacon);
-
-  // Crisp lettuce frill
-  const letGeo = new THREE.CylinderGeometry(r * 1.07, r * 1.02, 0.04, 18, 1, false, thetaStart, thetaLength);
-  const lettuce = new THREE.Mesh(letGeo, mats.lettuce);
-  lettuce.position.y = 0.14;
-  wedge.add(lettuce);
-
-  // Glossy top brioche dome slice
-  const topGeo = new THREE.SphereGeometry(r * 0.98, 22, 14, thetaStart, thetaLength, 0, Math.PI * 0.5);
-  const top = new THREE.Mesh(topGeo, mats.bunTop);
-  top.scale.set(1, 0.68, 1);
-  top.position.y = 0.155;
-  top.castShadow = true;
-  wedge.add(top);
-
-  // Sesame seeds on the crown
-  for (let s = 0; s < 5; s++) {
-    const a = thetaStart + thetaLength * (0.18 + (s / 5) * 0.65);
-    const rad = r * (0.42 + (s % 2) * 0.25);
-    const seed = new THREE.Mesh(new THREE.SphereGeometry(0.018, 8, 6), mats.sesame);
-    seed.scale.set(1.5, 0.6, 0.9);
-    const yHeight = 0.155 + Math.sqrt(Math.max(0.02, r * r - rad * rad)) * 0.67;
-    seed.position.set(Math.sin(a) * rad, yHeight, Math.cos(a) * rad);
-    wedge.add(seed);
+function solveTwoBoneArm(
+  shoulder: THREE.Vector3,
+  handTarget: THREE.Vector3,
+  poleHint: THREE.Vector3,
+  l1: number,
+  l2: number,
+  upperArm: THREE.Object3D,
+  elbowJoint: THREE.Object3D,
+  forearm: THREE.Object3D,
+  handMount: THREE.Object3D
+) {
+  _st.subVectors(handTarget, shoulder);
+  const rawDist = _st.length();
+  const maxReach = l1 + l2 - 0.02;
+  const d = THREE.MathUtils.clamp(rawDist, 0.24, maxReach);
+  if (rawDist > 1e-5) {
+    _dir.copy(_st).divideScalar(rawDist);
+  } else {
+    _dir.set(0, -1, 0);
   }
 
-  return wedge;
+  const cosAlpha = THREE.MathUtils.clamp((l1 * l1 + d * d - l2 * l2) / (2 * l1 * d), -1, 1);
+  const sinAlpha = Math.sqrt(Math.max(0, 1 - cosAlpha * cosAlpha));
+
+  const dot = poleHint.dot(_dir);
+  _perp.copy(poleHint).addScaledVector(_dir, -dot);
+  if (_perp.lengthSq() < 1e-5) {
+    _perp.set(0, -1, 0);
+  } else {
+    _perp.normalize();
+  }
+
+  _elbow
+    .copy(shoulder)
+    .addScaledVector(_dir, l1 * cosAlpha)
+    .addScaledVector(_perp, l1 * sinAlpha);
+
+  _uDir.subVectors(_elbow, shoulder).normalize();
+  upperArm.position.copy(shoulder);
+  upperArm.quaternion.setFromUnitVectors(_downY, _uDir);
+
+  elbowJoint.position.copy(_elbow);
+
+  _fDir.subVectors(handTarget, _elbow);
+  const fLen = _fDir.length();
+  if (fLen > 1e-5) {
+    _fDir.divideScalar(fLen);
+    forearm.position.copy(_elbow);
+    forearm.quaternion.setFromUnitVectors(_downY, _fDir);
+  }
+
+  handMount.position.copy(handTarget);
 }
 
 export function BullMascot({ onSceneChange }: BullMascotProps) {
   const mountRef = useRef<HTMLDivElement>(null);
+  const onSceneChangeRef = useRef(onSceneChange);
+  onSceneChangeRef.current = onSceneChange;
   const [webglFailed, setWebglFailed] = useState(false);
 
   useEffect(() => {
     const container = mountRef.current;
     if (!container) return;
 
-    // 1. Software WebGL detection per Three.js skill protocol
+    // 1. Software WebGL detection per Three.js protocol
     const isSoftwareGl = (() => {
       try {
         const probe = document.createElement('canvas').getContext('webgl2');
@@ -285,11 +209,14 @@ export function BullMascot({ onSceneChange }: BullMascotProps) {
 
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.15;
+    renderer.toneMappingExposure = 1.18;
     renderer.setPixelRatio(isSoftwareGl ? 1 : Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = !isSoftwareGl;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    renderer.setSize(container.clientWidth || window.innerWidth, container.clientHeight || window.innerHeight);
+    renderer.setSize(
+      container.clientWidth || window.innerWidth,
+      container.clientHeight || window.innerHeight
+    );
 
     const canvas = renderer.domElement;
     canvas.style.display = 'block';
@@ -302,7 +229,7 @@ export function BullMascot({ onSceneChange }: BullMascotProps) {
     };
     canvas.addEventListener('webglcontextlost', handleContextLost);
 
-    // 2. Scene, Camera & Studio Environment Reflection
+    // 2. Scene, Responsive Camera & Studio Environment Reflection
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x080808);
     scene.fog = new THREE.FogExp2(0x080808, 0.048);
@@ -315,14 +242,14 @@ export function BullMascot({ onSceneChange }: BullMascotProps) {
     const width = container.clientWidth || window.innerWidth;
     const height = container.clientHeight || window.innerHeight;
     const aspect = width / Math.max(1, height);
-    const camera = new THREE.PerspectiveCamera(aspect < 0.75 ? 45 : 37, aspect, 0.1, 40);
-    const baseCamZ = aspect < 0.75 ? 6.1 : 4.75;
-    camera.position.set(0, 0.75, baseCamZ);
-    camera.lookAt(0, 0.52, 0);
+    const camera = new THREE.PerspectiveCamera(aspect < 0.75 ? 43 : 36, aspect, 0.1, 40);
+    const baseCamZ = aspect < 0.75 ? 5.95 : 4.65;
+    camera.position.set(0, 0.74, baseCamZ);
+    camera.lookAt(0, 0.56, 0);
 
-    // 3. Three-Point Studio Lighting Rig (Warm Key, Cool Hemi Fill, Yellow Rim)
-    const keyLight = new THREE.DirectionalLight(0xffe1b0, 2.5);
-    keyLight.position.set(3.2, 4.6, 4.2);
+    // 3. Three-Point Studio Lighting Rig (Warm Key, Cool Hemi Fill, Golden Rim)
+    const keyLight = new THREE.DirectionalLight(0xffe1b0, 2.55);
+    keyLight.position.set(3.1, 4.7, 4.4);
     keyLight.castShadow = !isSoftwareGl;
     keyLight.shadow.mapSize.set(1024, 1024);
     keyLight.shadow.camera.near = 0.5;
@@ -336,30 +263,40 @@ export function BullMascot({ onSceneChange }: BullMascotProps) {
     keyLight.shadow.normalBias = 0.02;
     scene.add(keyLight);
 
-    const hemiFill = new THREE.HemisphereLight(0x9ab4d8, 0x26170b, 0.75);
+    const hemiFill = new THREE.HemisphereLight(0x9ab4d8, 0x26170b, 0.8);
     scene.add(hemiFill);
 
-    const rimLight = new THREE.SpotLight(0xffd000, 5.5, 16, Math.PI / 3.2, 0.7, 1.4);
-    rimLight.position.set(-2.4, 3.6, -3.4);
-    rimLight.target.position.set(0, 0.9, 0);
+    const rimLight = new THREE.SpotLight(0xffd000, 6.5, 16, Math.PI / 3.0, 0.72, 1.35);
+    rimLight.position.set(-2.3, 3.7, -3.3);
+    rimLight.target.position.set(0, 0.95, 0);
     scene.add(rimLight);
     scene.add(rimLight.target);
 
-    const warmFrontBounce = new THREE.PointLight(0xffb44c, 1.2, 9, 2);
-    warmFrontBounce.position.set(0.2, 0.4, 2.5);
+    const rimLightRight = new THREE.DirectionalLight(0xffb833, 1.45);
+    rimLightRight.position.set(2.8, 2.6, -3.2);
+    scene.add(rimLightRight);
+
+    const warmFrontBounce = new THREE.PointLight(0xffb44c, 1.3, 9, 2);
+    warmFrontBounce.position.set(0.15, 0.45, 2.6);
     scene.add(warmFrontBounce);
 
-    // 4. Ground & Contact Shadow Plane
-    const shadowTex = createContactShadowTexture();
+    // 4. Procedural Texture Pack & PBR Materials Library
+    const maxAniso = renderer.capabilities.getMaxAnisotropy();
+    const textures = createBullTexturePack(maxAniso);
+
     const groundShadow = new THREE.Mesh(
-      new THREE.PlaneGeometry(4.4, 4.4),
-      new THREE.MeshBasicMaterial({ map: shadowTex, transparent: true, depthWrite: false, opacity: 0.7 })
+      new THREE.PlaneGeometry(4.5, 4.5),
+      new THREE.MeshBasicMaterial({
+        map: textures.contactShadow,
+        transparent: true,
+        depthWrite: false,
+        opacity: 0.72,
+      })
     );
     groundShadow.rotation.x = -Math.PI / 2;
     groundShadow.position.y = -1.15;
     scene.add(groundShadow);
 
-    // Subtle dark stage floor receiving key light shadow
     const stageFloor = new THREE.Mesh(
       new THREE.CircleGeometry(9, 48),
       new THREE.MeshStandardMaterial({ color: 0x0a0a09, roughness: 0.9, metalness: 0.05 })
@@ -369,90 +306,131 @@ export function BullMascot({ onSceneChange }: BullMascotProps) {
     stageFloor.receiveShadow = true;
     scene.add(stageFloor);
 
-    // 5. PBR Materials Library (varied roughness/metalness per skill rules)
-    const furBump = createFurBumpTexture();
-    const apronCrestTex = createApronCrestTexture();
-
     const furMat = new THREE.MeshStandardMaterial({
-      color: 0x6f3b1e,
-      roughness: 0.84,
+      map: textures.furColor,
+      bumpMap: textures.furBump,
+      bumpScale: 0.022,
+      roughness: 0.82,
       metalness: 0.04,
-      bumpMap: furBump,
-      bumpScale: 0.025,
     });
     const furDarkMat = new THREE.MeshStandardMaterial({
-      color: 0x452210,
-      roughness: 0.88,
+      color: 0x4b2410,
+      bumpMap: textures.furBump,
+      bumpScale: 0.02,
+      roughness: 0.86,
       metalness: 0.03,
-      bumpMap: furBump,
-      bumpScale: 0.025,
     });
     const snoutMat = new THREE.MeshStandardMaterial({
-      color: 0xa6704c,
-      roughness: 0.62,
+      color: 0xb57953,
+      roughness: 0.56,
       metalness: 0.04,
     });
-    const hornMat = new THREE.MeshStandardMaterial({
-      color: 0xefe1b8,
-      roughness: 0.34,
-      metalness: 0.08,
+    const nostrilMat = new THREE.MeshStandardMaterial({
+      color: 0x261007,
+      roughness: 0.65,
+      metalness: 0.02,
     });
-    const goldMat = new THREE.MeshStandardMaterial({
+    const hornMat = new THREE.MeshPhysicalMaterial({
+      color: 0xf4e6c2,
+      roughness: 0.28,
+      metalness: 0.06,
+      clearcoat: 0.35,
+      clearcoatRoughness: 0.25,
+    });
+    const goldMat = new THREE.MeshPhysicalMaterial({
       color: 0xffd000,
-      roughness: 0.18,
+      roughness: 0.16,
       metalness: 0.92,
+      anisotropy: 0.75,
     });
     const apronMat = new THREE.MeshStandardMaterial({
-      color: 0x161615,
+      color: 0x151514,
       roughness: 0.78,
       metalness: 0.06,
     });
     const strapMat = new THREE.MeshStandardMaterial({
       color: 0xffd000,
-      roughness: 0.45,
-      metalness: 0.12,
+      roughness: 0.42,
+      metalness: 0.1,
     });
     const crestMat = new THREE.MeshStandardMaterial({
-      map: apronCrestTex,
+      map: textures.apronCrest,
       transparent: true,
-      roughness: 0.5,
-      metalness: 0.15,
+      roughness: 0.48,
+      metalness: 0.14,
       polygonOffset: true,
       polygonOffsetFactor: -1,
       polygonOffsetUnits: -1,
     });
-    const eyeWhiteMat = new THREE.MeshStandardMaterial({
-      color: 0xf8f6f0,
-      roughness: 0.12,
+    const eyeBallMat = new THREE.MeshPhysicalMaterial({
+      map: textures.eyeIris,
+      roughness: 0.08,
       metalness: 0.02,
-    });
-    const irisMat = new THREE.MeshStandardMaterial({
-      color: 0x261205,
-      roughness: 0.1,
-      metalness: 0.1,
+      clearcoat: 1.0,
+      clearcoatRoughness: 0.05,
     });
     const mouthInnerMat = new THREE.MeshStandardMaterial({
-      color: 0x2d0a08,
-      roughness: 0.55,
+      color: 0x2b0706,
+      roughness: 0.52,
       metalness: 0.0,
     });
+    const tongueMat = new THREE.MeshStandardMaterial({
+      color: 0xc94e52,
+      roughness: 0.38,
+      metalness: 0.02,
+    });
     const teethMat = new THREE.MeshStandardMaterial({
-      color: 0xfff8e8,
-      roughness: 0.25,
+      color: 0xfff8ea,
+      roughness: 0.22,
       metalness: 0.04,
+    });
+    const hoofMat = new THREE.MeshStandardMaterial({
+      color: 0x2a150b,
+      roughness: 0.42,
+      metalness: 0.1,
     });
 
     const burgerMats = {
-      bunTop: new THREE.MeshStandardMaterial({ color: 0xdf8225, roughness: 0.36, metalness: 0.05 }),
-      bunBottom: new THREE.MeshStandardMaterial({ color: 0xc9701c, roughness: 0.52, metalness: 0.03 }),
-      patty: new THREE.MeshStandardMaterial({ color: 0x3b1a0c, roughness: 0.88, metalness: 0.02 }),
-      cheese: new THREE.MeshStandardMaterial({ color: 0xffc800, roughness: 0.24, metalness: 0.04 }),
-      lettuce: new THREE.MeshStandardMaterial({ color: 0x4ca634, roughness: 0.58, metalness: 0.02 }),
-      bacon: new THREE.MeshStandardMaterial({ color: 0x8c2315, roughness: 0.42, metalness: 0.08 }),
-      sesame: new THREE.MeshStandardMaterial({ color: 0xfff2cf, roughness: 0.45, metalness: 0.02 }),
+      bunTop: new THREE.MeshStandardMaterial({
+        map: textures.bunTop,
+        roughness: 0.36,
+        metalness: 0.04,
+      }),
+      bunBottom: new THREE.MeshStandardMaterial({
+        color: 0xcc721c,
+        roughness: 0.54,
+        metalness: 0.03,
+      }),
+      patty: new THREE.MeshStandardMaterial({
+        color: 0x3b1a0c,
+        bumpMap: textures.pattyBump,
+        bumpScale: 0.028,
+        roughness: 0.88,
+        metalness: 0.02,
+      }),
+      cheese: new THREE.MeshStandardMaterial({
+        color: 0xffc800,
+        roughness: 0.22,
+        metalness: 0.04,
+      }),
+      lettuce: new THREE.MeshStandardMaterial({
+        color: 0x4ca634,
+        roughness: 0.55,
+        metalness: 0.02,
+      }),
+      bacon: new THREE.MeshStandardMaterial({
+        color: 0x8f2416,
+        roughness: 0.4,
+        metalness: 0.08,
+      }),
+      sesame: new THREE.MeshStandardMaterial({
+        color: 0xfff3d4,
+        roughness: 0.44,
+        metalness: 0.02,
+      }),
     };
 
-    // 6. Sculpted Composite 3D Anthropomorphic Bull Group
+    // 5. Sculpted Composite 3D Anthropomorphic Bull Character
     const bullRoot = new THREE.Group();
     bullRoot.position.set(0, -1.15, 0);
     scene.add(bullRoot);
@@ -461,183 +439,209 @@ export function BullMascot({ onSceneChange }: BullMascotProps) {
     torsoGroup.position.set(0, 1.08, 0);
     bullRoot.add(torsoGroup);
 
-    // Muscular Torso & Shoulders
-    const chestMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.68, 0.56, 1.35, 28), furDarkMat);
-    chestMesh.scale.set(1.16, 1, 0.82);
-    chestMesh.castShadow = true;
-    torsoGroup.add(chestMesh);
+    // Sculpted muscular torso + pectoral contours
+    const torsoMesh = new THREE.Mesh(createSculptedTorsoGeometry(), furMat);
+    torsoMesh.castShadow = true;
+    torsoMesh.receiveShadow = true;
+    torsoGroup.add(torsoMesh);
 
-    const shirtTee = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.58, 1.15, 28), apronMat);
-    shirtTee.scale.set(1.17, 1, 0.83);
-    shirtTee.position.y = -0.04;
-    shirtTee.castShadow = true;
-    torsoGroup.add(shirtTee);
+    // Sculpted Black Tee & Curved Apron + Tube Straps + Brass Rivets + Crest
+    const shirtMesh = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.68, 0.56, 1.18, 32),
+      apronMat
+    );
+    shirtMesh.scale.set(1.16, 1, 0.8);
+    shirtMesh.position.y = -0.05;
+    shirtMesh.castShadow = true;
+    torsoGroup.add(shirtMesh);
 
-    // Apron Bib & Skirt + Yellow Straps + Brass Rivets + Chest Crest
-    const apronFront = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.65, 1.32, 24, 1, false, -0.85, 1.7), apronMat);
-    apronFront.position.set(0, -0.22, 0.08);
-    apronFront.scale.set(1.08, 1, 0.78);
-    apronFront.castShadow = true;
-    torsoGroup.add(apronFront);
+    const apronBib = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.66, 0.7, 1.24, 32, 1, false, -0.84, 1.68),
+      apronMat
+    );
+    apronBib.position.set(0, -0.22, 0.055);
+    apronBib.scale.set(1.1, 1, 0.8);
+    apronBib.castShadow = true;
+    torsoGroup.add(apronBib);
 
-    const strapLeft = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.74, 0.08), strapMat);
-    strapLeft.position.set(-0.34, 0.42, 0.34);
-    strapLeft.rotation.set(-0.28, 0, -0.14);
-    torsoGroup.add(strapLeft);
+    const makeShoulderStrap = (side: -1 | 1) => {
+      const curve = new THREE.CatmullRomCurve3([
+        new THREE.Vector3(side * 0.3, 0.16, 0.51),
+        new THREE.Vector3(side * 0.34, 0.5, 0.38),
+        new THREE.Vector3(side * 0.33, 0.65, 0.12),
+        new THREE.Vector3(side * 0.28, 0.52, -0.24),
+      ]);
+      const geo = new THREE.TubeGeometry(curve, 24, 0.044, 10, false);
+      const mesh = new THREE.Mesh(geo, strapMat);
+      mesh.castShadow = true;
+      return mesh;
+    };
+    torsoGroup.add(makeShoulderStrap(-1), makeShoulderStrap(1));
 
-    const strapRight = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.74, 0.08), strapMat);
-    strapRight.position.set(0.34, 0.42, 0.34);
-    strapRight.rotation.set(-0.28, 0, 0.14);
-    torsoGroup.add(strapRight);
-
-    const rivetGeo = new THREE.CylinderGeometry(0.036, 0.036, 0.04, 14);
+    const rivetGeo = new THREE.SphereGeometry(0.036, 14, 10);
     const rivetL = new THREE.Mesh(rivetGeo, goldMat);
-    rivetL.rotation.x = Math.PI / 2;
-    rivetL.position.set(-0.3, 0.16, 0.55);
-    torsoGroup.add(rivetL);
-
+    rivetL.scale.set(1, 1, 0.55);
+    rivetL.position.set(-0.3, 0.17, 0.545);
     const rivetR = new THREE.Mesh(rivetGeo, goldMat);
-    rivetR.rotation.x = Math.PI / 2;
-    rivetR.position.set(0.3, 0.16, 0.55);
-    torsoGroup.add(rivetR);
+    rivetR.scale.set(1, 1, 0.55);
+    rivetR.position.set(0.3, 0.17, 0.545);
+    torsoGroup.add(rivetL, rivetR);
 
     const crestPlane = new THREE.Mesh(new THREE.PlaneGeometry(0.36, 0.36), crestMat);
-    crestPlane.position.set(0, 0.02, 0.605);
+    crestPlane.position.set(0, 0.0, 0.585);
     torsoGroup.add(crestPlane);
 
-    // Thick Neck
-    const neckMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.48, 0.48, 20), furMat);
-    neckMesh.position.set(0, 0.76, -0.02);
+    // Muscular neck blending torso to head
+    const neckMesh = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.35, 0.48, 0.44, 24),
+      furMat
+    );
+    neckMesh.position.set(0, 0.78, -0.02);
     neckMesh.castShadow = true;
     torsoGroup.add(neckMesh);
 
     // HEAD GROUP
     const headGroup = new THREE.Group();
-    headGroup.position.set(0, 1.08, 0.04);
+    headGroup.position.set(0, 1.11, 0.04);
     torsoGroup.add(headGroup);
 
-    // Sculpted Cranium
-    const cranium = new THREE.Mesh(new THREE.SphereGeometry(0.46, 26, 22), furMat);
-    cranium.scale.set(1.04, 1.06, 1.08);
-    cranium.castShadow = true;
-    headGroup.add(cranium);
+    const sculptedHead = new THREE.Mesh(createSculptedBullHeadGeometry(), furMat);
+    sculptedHead.castShadow = true;
+    sculptedHead.receiveShadow = true;
+    headGroup.add(sculptedHead);
 
-    // Broad Upper Snout
-    const upperSnout = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.28, 0.48), snoutMat);
-    upperSnout.position.set(0, -0.1, 0.34);
-    headGroup.add(upperSnout);
+    // Smooth sculpted muzzle nose pad + twin recessed nostrils + gold nose ring
+    const nosePad = new THREE.Mesh(createSculptedNosePadGeometry(), snoutMat);
+    nosePad.position.set(0, -0.135, 0.535);
+    nosePad.castShadow = true;
+    headGroup.add(nosePad);
 
-    const snoutTip = new THREE.Mesh(new THREE.SphereGeometry(0.29, 20, 16), snoutMat);
-    snoutTip.scale.set(1.12, 0.56, 0.85);
-    snoutTip.position.set(0, -0.08, 0.44);
-    headGroup.add(snoutTip);
+    const nostrilGeo = new THREE.SphereGeometry(0.042, 12, 10);
+    const nostrilL = new THREE.Mesh(nostrilGeo, nostrilMat);
+    nostrilL.scale.set(1.15, 0.85, 0.65);
+    nostrilL.position.set(-0.145, -0.14, 0.685);
+    const nostrilR = new THREE.Mesh(nostrilGeo, nostrilMat);
+    nostrilR.scale.set(1.15, 0.85, 0.65);
+    nostrilR.position.set(0.145, -0.14, 0.685);
+    headGroup.add(nostrilL, nostrilR);
 
-    // Nostrils
-    const nostrilGeo = new THREE.SphereGeometry(0.055, 12, 10);
-    const nostrilL = new THREE.Mesh(nostrilGeo, furDarkMat);
-    nostrilL.position.set(-0.14, -0.11, 0.65);
-    headGroup.add(nostrilL);
-
-    const nostrilR = new THREE.Mesh(nostrilGeo, furDarkMat);
-    nostrilR.position.set(0.14, -0.11, 0.65);
-    headGroup.add(nostrilR);
-
-    // Brushed Gold Nose Ring
-    const noseRing = new THREE.Mesh(new THREE.TorusGeometry(0.125, 0.028, 14, 28), goldMat);
-    noseRing.position.set(0, -0.22, 0.62);
-    noseRing.rotation.x = 0.25;
+    const noseRing = new THREE.Mesh(
+      new THREE.TorusGeometry(0.115, 0.024, 16, 36),
+      goldMat
+    );
+    noseRing.position.set(0, -0.255, 0.68);
+    noseRing.rotation.x = 0.28;
     headGroup.add(noseRing);
 
-    // Mouth Interior Cavity + Upper Teeth
-    const mouthCavity = new THREE.Mesh(new THREE.SphereGeometry(0.24, 16, 12), mouthInnerMat);
-    mouthCavity.scale.set(1.1, 0.65, 0.9);
-    mouthCavity.position.set(0, -0.24, 0.34);
+    // Mouth cavity & curved upper teeth
+    const mouthCavity = new THREE.Mesh(new THREE.SphereGeometry(0.22, 18, 14), mouthInnerMat);
+    mouthCavity.scale.set(1.06, 0.58, 0.88);
+    mouthCavity.position.set(0, -0.245, 0.37);
     headGroup.add(mouthCavity);
 
-    const upperTeeth = new THREE.Mesh(new THREE.CylinderGeometry(0.21, 0.21, 0.05, 16, 1, false, -1.1, 2.2), teethMat);
-    upperTeeth.position.set(0, -0.2, 0.42);
+    const upperTeeth = createTeethArc(teethMat, 7, 0.195, true);
+    upperTeeth.position.set(0, -0.215, 0.34);
     headGroup.add(upperTeeth);
 
-    // ARTICULATED LOWER JAW (opens wide & chews!)
+    // Articulated Sculpted Lower Jaw + Tongue + Lower Teeth
     const jawGroup = new THREE.Group();
-    jawGroup.position.set(0, -0.22, 0.14);
+    jawGroup.position.set(0, -0.23, 0.15);
     headGroup.add(jawGroup);
 
-    const lowerJawMesh = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.16, 0.42), furMat);
-    lowerJawMesh.position.set(0, -0.09, 0.23);
+    const lowerJawMesh = new THREE.Mesh(createSculptedJawGeometry(), snoutMat);
+    lowerJawMesh.position.set(0, -0.075, 0.21);
     lowerJawMesh.castShadow = true;
     jawGroup.add(lowerJawMesh);
 
-    const chinMesh = new THREE.Mesh(new THREE.SphereGeometry(0.21, 16, 12), snoutMat);
-    chinMesh.scale.set(1.12, 0.58, 0.9);
-    chinMesh.position.set(0, -0.12, 0.38);
-    jawGroup.add(chinMesh);
+    const tongueMesh = new THREE.Mesh(new THREE.SphereGeometry(0.13, 16, 12), tongueMat);
+    tongueMesh.scale.set(1.0, 0.34, 1.38);
+    tongueMesh.position.set(0, -0.018, 0.24);
+    jawGroup.add(tongueMesh);
 
-    const lowerTeeth = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 0.045, 16, 1, false, -1.0, 2.0), teethMat);
-    lowerTeeth.position.set(0, -0.02, 0.28);
+    const lowerTeeth = createTeethArc(teethMat, 6, 0.165, false);
+    lowerTeeth.position.set(0, -0.012, 0.215);
     jawGroup.add(lowerTeeth);
 
-    // Fierce Expressive Eyes + Brows + Blinking/Squinting Eyelids
-    const eyeGroupL = new THREE.Group();
-    eyeGroupL.position.set(-0.2, 0.11, 0.41);
-    headGroup.add(eyeGroupL);
+    // Expressive TV-Commercial Eyes (crisp circular iris + upper/lower eyelids)
+    const eyeGeo = createSculptedEyeballGeometry(0.09);
+    const upperLidGeo = new THREE.SphereGeometry(
+      0.099,
+      24,
+      14,
+      0,
+      Math.PI * 2,
+      0,
+      Math.PI * 0.52
+    );
+    const lowerLidGeo = new THREE.SphereGeometry(
+      0.098,
+      24,
+      14,
+      0,
+      Math.PI * 2,
+      Math.PI * 0.58,
+      Math.PI * 0.42
+    );
 
-    const eyeGroupR = new THREE.Group();
-    eyeGroupR.position.set(0.2, 0.11, 0.41);
-    headGroup.add(eyeGroupR);
+    const buildEyeRig = (xPos: number) => {
+      const socket = new THREE.Group();
+      socket.position.set(xPos, 0.085, 0.375);
+      headGroup.add(socket);
 
-    const eyeBallGeo = new THREE.SphereGeometry(0.088, 16, 14);
-    const irisGeo = new THREE.SphereGeometry(0.052, 14, 12);
+      const aimPivot = new THREE.Group();
+      const eyeMesh = new THREE.Mesh(eyeGeo, eyeBallMat);
+      aimPivot.add(eyeMesh);
+      socket.add(aimPivot);
 
-    const eyeL = new THREE.Mesh(eyeBallGeo, eyeWhiteMat);
-    const irisL = new THREE.Mesh(irisGeo, irisMat);
-    irisL.position.set(0.01, 0, 0.056);
-    const lidL = new THREE.Mesh(new THREE.SphereGeometry(0.096, 16, 10, 0, Math.PI * 2, 0, Math.PI * 0.52), furDarkMat);
-    lidL.rotation.x = -0.7;
-    eyeGroupL.add(eyeL, irisL, lidL);
+      const upperLid = new THREE.Mesh(upperLidGeo, furDarkMat);
+      upperLid.rotation.x = -0.82;
+      socket.add(upperLid);
 
-    const eyeR = new THREE.Mesh(eyeBallGeo, eyeWhiteMat);
-    const irisR = new THREE.Mesh(irisGeo, irisMat);
-    irisR.position.set(-0.01, 0, 0.056);
-    const lidR = new THREE.Mesh(new THREE.SphereGeometry(0.096, 16, 10, 0, Math.PI * 2, 0, Math.PI * 0.52), furDarkMat);
-    lidR.rotation.x = -0.7;
-    eyeGroupR.add(eyeR, irisR, lidR);
+      const lowerLid = new THREE.Mesh(lowerLidGeo, furDarkMat);
+      lowerLid.rotation.x = 0.72;
+      socket.add(lowerLid);
 
-    const browGeo = new THREE.BoxGeometry(0.22, 0.065, 0.1);
-    const browL = new THREE.Mesh(browGeo, furDarkMat);
-    browL.position.set(-0.21, 0.22, 0.44);
-    browL.rotation.z = -0.22;
+      return { aimPivot, upperLid, lowerLid };
+    };
+
+    const eyeL = buildEyeRig(-0.185);
+    const eyeR = buildEyeRig(0.185);
+
+    // Sculpted Curved Tube Eyebrows
+    const browL = createCurvedEyebrow('left', furDarkMat);
+    browL.position.set(-0.19, 0.215, 0.425);
+    browL.rotation.z = -0.14;
     headGroup.add(browL);
 
-    const browR = new THREE.Mesh(browGeo, furDarkMat);
-    browR.position.set(0.21, 0.22, 0.44);
-    browR.rotation.z = 0.22;
+    const browR = createCurvedEyebrow('right', furDarkMat);
+    browR.position.set(0.19, 0.215, 0.425);
+    browR.rotation.z = 0.14;
     headGroup.add(browR);
 
-    // Ears
-    const earGeo = new THREE.ConeGeometry(0.12, 0.34, 12);
+    // Sculpted Expressive Ears
+    const earGeo = createSculptedEarGeometry();
     const earL = new THREE.Mesh(earGeo, furDarkMat);
-    earL.position.set(-0.52, 0.16, 0.0);
-    earL.rotation.z = Math.PI * 0.62;
+    earL.position.set(-0.44, 0.15, -0.02);
+    earL.rotation.set(0.12, 0.25, 1.24);
     headGroup.add(earL);
 
     const earR = new THREE.Mesh(earGeo, furDarkMat);
-    earR.position.set(0.52, 0.16, 0.0);
-    earR.rotation.z = -Math.PI * 0.62;
+    earR.position.set(0.44, 0.15, -0.02);
+    earR.rotation.set(0.12, -0.25, -1.24);
     headGroup.add(earR);
 
-    // Massive Curved 3D Horns
+    // Majestic Tapered Curved 3D Horns with Keratin Ridges
     const leftHornCurve = new THREE.CatmullRomCurve3([
-      new THREE.Vector3(-0.32, 0.32, -0.02),
-      new THREE.Vector3(-0.68, 0.38, 0.04),
-      new THREE.Vector3(-0.92, 0.66, 0.14),
-      new THREE.Vector3(-0.82, 1.02, 0.2),
+      new THREE.Vector3(-0.31, 0.31, -0.02),
+      new THREE.Vector3(-0.67, 0.37, 0.04),
+      new THREE.Vector3(-0.92, 0.67, 0.14),
+      new THREE.Vector3(-0.82, 1.03, 0.21),
     ]);
     const rightHornCurve = new THREE.CatmullRomCurve3([
-      new THREE.Vector3(0.32, 0.32, -0.02),
-      new THREE.Vector3(0.68, 0.38, 0.04),
-      new THREE.Vector3(0.92, 0.66, 0.14),
-      new THREE.Vector3(0.82, 1.02, 0.2),
+      new THREE.Vector3(0.31, 0.31, -0.02),
+      new THREE.Vector3(0.67, 0.37, 0.04),
+      new THREE.Vector3(0.92, 0.67, 0.14),
+      new THREE.Vector3(0.82, 1.03, 0.21),
     ]);
     const leftHorn = new THREE.Mesh(createTaperedHornGeometry(leftHornCurve), hornMat);
     leftHorn.castShadow = true;
@@ -645,82 +649,50 @@ export function BullMascot({ onSceneChange }: BullMascotProps) {
     rightHorn.castShadow = true;
     headGroup.add(leftHorn, rightHorn);
 
-    // LEFT ARM & HAND
-    const leftShoulder = new THREE.Group();
-    leftShoulder.position.set(-0.82, 0.48, 0.04);
-    torsoGroup.add(leftShoulder);
+    // TWO-JOINT MUSCULAR ARMS + 4-FINGER HANDS (Analytic 2-Bone IK)
+    const upperArmLen = 0.58;
+    const forearmLen = 0.56;
+    const upperArmGeo = createMuscularLimbGeometry(upperArmLen, 0.18, 0.205, 0.15);
+    const forearmGeo = createMuscularLimbGeometry(forearmLen, 0.15, 0.168, 0.125);
+    const shoulderCapGeo = new THREE.SphereGeometry(0.195, 18, 14);
+    const elbowCapGeo = new THREE.SphereGeometry(0.145, 16, 12);
 
-    const leftUpperArm = new THREE.Mesh(new THREE.CapsuleGeometry(0.19, 0.44, 10, 14), furMat);
-    leftUpperArm.position.set(0, -0.26, 0.04);
-    leftUpperArm.castShadow = true;
-    leftShoulder.add(leftUpperArm);
+    const shoulderCapL = new THREE.Mesh(shoulderCapGeo, furMat);
+    shoulderCapL.position.copy(_shoulderL);
+    const shoulderCapR = new THREE.Mesh(shoulderCapGeo, furMat);
+    shoulderCapR.position.copy(_shoulderR);
+    torsoGroup.add(shoulderCapL, shoulderCapR);
 
-    const leftElbow = new THREE.Group();
-    leftElbow.position.set(0, -0.52, 0.08);
-    leftShoulder.add(leftElbow);
+    const upperArmL = new THREE.Mesh(upperArmGeo, furMat);
+    upperArmL.castShadow = true;
+    const elbowJointL = new THREE.Mesh(elbowCapGeo, furMat);
+    const forearmL = new THREE.Mesh(forearmGeo, furMat);
+    forearmL.castShadow = true;
+    const leftHand = createStylizedHand(furDarkMat, hoofMat, 'left');
+    leftHand.group.rotation.set(0, 0, Math.PI * 0.5);
+    torsoGroup.add(upperArmL, elbowJointL, forearmL, leftHand.group);
 
-    const leftForearm = new THREE.Mesh(new THREE.CapsuleGeometry(0.16, 0.42, 10, 14), furMat);
-    leftForearm.position.set(0.08, -0.18, 0.24);
-    leftForearm.rotation.x = 1.05;
-    leftForearm.rotation.z = -0.35;
-    leftForearm.castShadow = true;
-    leftElbow.add(leftForearm);
+    const upperArmR = new THREE.Mesh(upperArmGeo, furMat);
+    upperArmR.castShadow = true;
+    const elbowJointR = new THREE.Mesh(elbowCapGeo, furMat);
+    const forearmR = new THREE.Mesh(forearmGeo, furMat);
+    forearmR.castShadow = true;
+    const rightHand = createStylizedHand(furDarkMat, hoofMat, 'right');
+    rightHand.group.rotation.order = 'YXZ';
+    rightHand.group.rotation.set(0, 0, -Math.PI * 0.5);
+    torsoGroup.add(upperArmR, elbowJointR, forearmR, rightHand.group);
 
-    const leftHand = new THREE.Mesh(new THREE.SphereGeometry(0.17, 14, 12), furDarkMat);
-    leftHand.scale.set(1.05, 0.85, 1.25);
-    leftHand.position.set(0.24, -0.24, 0.56);
-    leftElbow.add(leftHand);
+    // 6. SOLID BEVELED 3-STAGE BITEABLE BURGER
+    const burger = createBiteableBurger(burgerMats);
+    burger.root.position.set(0, -0.04, 0.88);
+    torsoGroup.add(burger.root);
 
-    // RIGHT ARM & HAND (also forms Thumbs-Up / Approval gesture in Scene 4!)
-    const rightShoulder = new THREE.Group();
-    rightShoulder.position.set(0.82, 0.48, 0.04);
-    torsoGroup.add(rightShoulder);
-
-    const rightUpperArm = new THREE.Mesh(new THREE.CapsuleGeometry(0.19, 0.44, 10, 14), furMat);
-    rightUpperArm.position.set(0, -0.26, 0.04);
-    rightUpperArm.castShadow = true;
-    rightShoulder.add(rightUpperArm);
-
-    const rightElbow = new THREE.Group();
-    rightElbow.position.set(0, -0.52, 0.08);
-    rightShoulder.add(rightElbow);
-
-    const rightForearm = new THREE.Mesh(new THREE.CapsuleGeometry(0.16, 0.42, 10, 14), furMat);
-    rightForearm.position.set(-0.08, -0.18, 0.24);
-    rightForearm.rotation.x = 1.05;
-    rightForearm.rotation.z = 0.35;
-    rightForearm.castShadow = true;
-    rightElbow.add(rightForearm);
-
-    const rightHandGroup = new THREE.Group();
-    rightHandGroup.position.set(-0.24, -0.24, 0.56);
-    rightElbow.add(rightHandGroup);
-
-    const rightPalm = new THREE.Mesh(new THREE.SphereGeometry(0.17, 14, 12), furDarkMat);
-    rightPalm.scale.set(1.05, 0.85, 1.25);
-    rightHandGroup.add(rightPalm);
-
-    const thumbUp = new THREE.Mesh(new THREE.CapsuleGeometry(0.058, 0.16, 8, 10), snoutMat);
-    thumbUp.position.set(-0.04, 0.16, 0.02);
-    thumbUp.visible = false;
-    rightHandGroup.add(thumbUp);
-
-    // 7. 3-STAGE BITEABLE 3D GOURMET BURGER
-    const burgerGroup = new THREE.Group();
-    burgerGroup.position.set(0, -0.05, 0.88);
-    torsoGroup.add(burgerGroup);
-
-    // Three 120-degree sectors that disappear cleanly with each real bite!
-    const wedge1 = buildBurgerWedge(-Math.PI * 0.33, Math.PI * 0.67, burgerMats); // Front-center wedge (Bite 1)
-    const wedge2 = buildBurgerWedge(Math.PI * 0.34, Math.PI * 0.67, burgerMats); // Right-back wedge (Bite 2)
-    const wedge3 = buildBurgerWedge(Math.PI * 1.01, Math.PI * 0.66, burgerMats); // Final wedge (Bite 3)
-    burgerGroup.add(wedge1, wedge2, wedge3);
-
-    // 8. 3D CRUMB PARTICLES + GRILL EMBERS
+    // 7. 3D CRUMB PARTICLES + RISING GRILL EMBERS
     const crumbs: CrumbParticle[] = [];
     const crumbGeo = new THREE.DodecahedronGeometry(0.036, 0);
-    for (let i = 0; i < 22; i++) {
-      const mat = i % 3 === 0 ? burgerMats.cheese : burgerMats.bunTop;
+    for (let i = 0; i < 24; i++) {
+      const mat =
+        i % 3 === 0 ? burgerMats.cheese : i % 3 === 1 ? burgerMats.bunTop : burgerMats.patty;
       const m = new THREE.Mesh(crumbGeo, mat);
       m.visible = false;
       scene.add(m);
@@ -737,34 +709,34 @@ export function BullMascot({ onSceneChange }: BullMascotProps) {
       });
     }
 
-    const emberCount = 26;
+    const emberCount = 28;
     const emberGeo = new THREE.SphereGeometry(0.022, 6, 6);
     const emberMat = new THREE.MeshBasicMaterial({ color: 0xffc800 });
     const emberMesh = new THREE.InstancedMesh(emberGeo, emberMat, emberCount);
     emberMesh.frustumCulled = false;
     const emberSeeds = Array.from({ length: emberCount }, () => ({
-      x: (Math.random() - 0.5) * 4.5,
-      y: -1.1 + Math.random() * 2.8,
-      z: -1.8 + Math.random() * 2.6,
+      x: (Math.random() - 0.5) * 4.6,
+      y: -1.1 + Math.random() * 2.9,
+      z: -1.9 + Math.random() * 2.7,
       speed: 0.45 + Math.random() * 0.65,
       phase: Math.random() * Math.PI * 2,
       scale: 0.5 + Math.random() * 0.9,
     }));
     scene.add(emberMesh);
 
-    const spawnCrumbBurst = (originY: number, originZ: number) => {
+    const spawnCrumbBurst = (originY: number, originZ: number, count = 10) => {
       let spawned = 0;
       for (const c of crumbs) {
-        if (!c.active && spawned < 10) {
+        if (!c.active && spawned < count) {
           c.active = true;
           c.life = 0;
-          c.maxLife = 0.65 + Math.random() * 0.35;
+          c.maxLife = 0.6 + Math.random() * 0.35;
           c.mesh.visible = true;
-          c.mesh.position.set((Math.random() - 0.5) * 0.22, originY, originZ);
-          c.mesh.scale.setScalar(0.8 + Math.random() * 0.8);
-          c.vx = (Math.random() - 0.5) * 1.8;
-          c.vy = 0.8 + Math.random() * 1.4;
-          c.vz = 0.6 + Math.random() * 1.1;
+          c.mesh.position.set((Math.random() - 0.5) * 0.24, originY, originZ);
+          c.mesh.scale.setScalar(0.75 + Math.random() * 0.75);
+          c.vx = (Math.random() - 0.5) * 1.9;
+          c.vy = 0.75 + Math.random() * 1.35;
+          c.vz = 0.55 + Math.random() * 1.1;
           c.rx = (Math.random() - 0.5) * 12;
           c.ry = (Math.random() - 0.5) * 12;
           spawned++;
@@ -772,12 +744,11 @@ export function BullMascot({ onSceneChange }: BullMascotProps) {
       }
     };
 
-    // Pre-compile shaders on hardware GPUs
     if (!isSoftwareGl) {
       renderer.compile(scene, camera);
     }
 
-    // 9. Animation Loop with Time-Based Eating Choreography
+    // 8. Cinematic 4s Choreography Loop (2 Real Bites + Thumbs-Up Approval)
     const clock = new THREE.Clock();
     const dummy = new THREE.Object3D();
     let frameId = 0;
@@ -786,11 +757,12 @@ export function BullMascot({ onSceneChange }: BullMascotProps) {
     let bite1Triggered = false;
     let bite2Triggered = false;
     let bite3Triggered = false;
+    let cameraPunch = 0;
 
     const setScene = (next: IntroScene) => {
       if (currentScene !== next) {
         currentScene = next;
-        onSceneChange?.(next);
+        onSceneChangeRef.current?.(next);
       }
     };
 
@@ -799,7 +771,7 @@ export function BullMascot({ onSceneChange }: BullMascotProps) {
       const w = container.clientWidth || window.innerWidth;
       const h = container.clientHeight || window.innerHeight;
       const asp = w / Math.max(1, h);
-      camera.fov = asp < 0.75 ? 45 : 37;
+      camera.fov = asp < 0.75 ? 43 : 36;
       camera.aspect = asp;
       camera.updateProjectionMatrix();
       renderer.setSize(w, h);
@@ -828,143 +800,254 @@ export function BullMascot({ onSceneChange }: BullMascotProps) {
       const dt = Math.min(clock.getDelta(), 0.08);
       const t = clock.getElapsedTime();
 
-      // Determine choreography targets across the 3.9s eating sequence
-      let targetBurgerY = -0.05;
+      cameraPunch = THREE.MathUtils.damp(cameraPunch, 0, 12, dt);
+
+      // Default choreography targets
+      let targetBurgerY = -0.04;
       let targetBurgerZ = 0.88;
-      let targetBurgerRotX = 0.08;
-      let targetLeftArmX = -0.22;
-      let targetLeftArmZ = 0.05;
-      let targetRightArmX = -0.22;
-      let targetRightArmZ = -0.05;
+      let targetBurgerRotX = 0.1;
+      let targetBurgerRotY = -0.22;
       let targetJawRotX = 0.02;
-      let targetHeadRotX = 0.14; // looking at burger
+      let targetHeadRotX = 0.14;
       let targetHeadRotY = 0;
-      let targetSquint = -0.7; // open eyes
+      let targetUpperLid = -0.82;
+      let targetLowerLid = 0.72;
+      let targetBrowLift = 0.215;
+      let targetBrowTilt = 0.14;
+      let targetEyePitch = 0.12;
+      let targetEyeYaw = 0;
+      let targetEarWiggle = 0;
+      let targetFingersCurl = 0.05;
+      let targetThumbAngle = 0;
+      let targetRightHandYaw = 0;
       let targetCamZ = baseCamZ;
-      let targetCamY = 0.75;
+      let targetCamY = 0.74;
+      let targetCamX = 0;
+      let handsHoldBurger = true;
 
-      if (t < 0.72) {
-        // Scene 1: Presentation — bull eyes the burger eagerly
+      if (t < 0.82) {
+        // Scene 1: Presentation & Appetite — bull holds full burger & eyes it eagerly
         setScene(1);
-        targetBurgerY = -0.05 + Math.sin(t * 4) * 0.02;
-        targetCamZ = baseCamZ - t * 0.35;
-      } else if (t < 1.82) {
-        // Scene 2: First BIG Bite!
+        targetBurgerY = -0.04 + Math.sin(t * 4.5) * 0.022;
+        targetBurgerRotY = -0.25 + Math.sin(t * 2.5) * 0.12;
+        targetBrowLift = 0.235;
+        targetBrowTilt = 0.08;
+        targetEyePitch = 0.22;
+        targetCamZ = baseCamZ - t * 0.32;
+        targetCamX = Math.sin(t * 1.8) * 0.18;
+      } else if (t < 1.94) {
+        // Scene 2: FIRST BIG REAL BITE!
         setScene(2);
-        const phase = t - 0.72;
-        targetBurgerY = 0.78;
-        targetBurgerZ = 0.64;
-        targetBurgerRotX = -0.24;
-        targetLeftArmX = -1.22;
-        targetLeftArmZ = 0.25;
-        targetRightArmX = -1.22;
-        targetRightArmZ = -0.25;
-        targetHeadRotX = 0.18;
-        targetCamZ = baseCamZ - 0.65;
+        const phase = t - 0.82;
+        targetBurgerY = 0.74;
+        targetBurgerZ = 0.67;
+        targetBurgerRotX = -0.22;
+        targetBurgerRotY = -0.28;
+        targetHeadRotX = 0.16;
+        targetCamZ = baseCamZ - 0.62;
         targetCamY = 0.92;
+        targetCamX = 0.12;
 
-        if (phase < 0.25) {
-          targetJawRotX = 0.56; // Open wide!
-        } else if (phase < 0.42) {
-          targetJawRotX = 0.04; // CHOMP!
+        if (phase < 0.26) {
+          // Anticipation: jaw opens wide, brows lift
+          targetJawRotX = 0.56;
+          targetBrowLift = 0.24;
+          targetEyePitch = 0.06;
+        } else if (phase < 0.44) {
+          // CHOMP!
+          targetJawRotX = 0.04;
+          targetBrowTilt = 0.24;
+          targetEarWiggle = 0.18;
           if (!bite1Triggered) {
             bite1Triggered = true;
-            wedge1.visible = false;
-            spawnCrumbBurst(0.75, 0.55);
+            burger.setStage(1);
+            spawnCrumbBurst(0.74, 0.55, 11);
+            cameraPunch = 0.14;
           }
         } else {
-          // Satisfied chew oscillations
-          targetJawRotX = 0.08 + Math.abs(Math.sin((phase - 0.42) * 16)) * 0.24;
-          targetSquint = -0.15;
-          targetBurgerY = 0.45;
-          targetBurgerZ = 0.78;
-          targetLeftArmX = -0.75;
-          targetRightArmX = -0.75;
+          // Joyful chew + tilt burger slightly toward camera to display clean solid bite mark!
+          targetJawRotX = 0.07 + Math.abs(Math.sin((phase - 0.44) * 16)) * 0.23;
+          targetUpperLid = -0.45;
+          targetLowerLid = 0.12; // happy ^ ^ squint from below
+          targetEarWiggle = Math.sin((phase - 0.44) * 14) * 0.1;
+          targetBurgerY = 0.38;
+          targetBurgerZ = 0.82;
+          targetBurgerRotX = 0.26;
+          targetBurgerRotY = -0.34;
+          targetHeadRotX = 0.04;
+          targetEyePitch = 0.08;
         }
-      } else if (t < 2.88) {
-        // Scene 3: Second Bite + Final Bite!
+      } else if (t < 3.04) {
+        // Scene 3: SECOND REAL BITE + FINAL CRESCENT FINISH!
         setScene(3);
-        const phase = t - 1.82;
-        targetBurgerY = 0.79;
-        targetBurgerZ = 0.62;
-        targetBurgerRotX = -0.28;
-        targetLeftArmX = -1.24;
-        targetLeftArmZ = 0.28;
-        targetRightArmX = -1.24;
-        targetRightArmZ = -0.28;
-        targetHeadRotX = 0.16;
-        targetCamZ = baseCamZ - 0.75;
-        targetCamY = 0.95;
+        const phase = t - 1.94;
+        targetBurgerY = 0.75;
+        targetBurgerZ = 0.66;
+        targetBurgerRotX = -0.24;
+        targetBurgerRotY = -0.18;
+        targetHeadRotX = 0.15;
+        targetCamZ = baseCamZ - 0.72;
+        targetCamY = 0.94;
+        targetCamX = -0.1;
 
         if (phase < 0.22) {
-          targetJawRotX = 0.54;
-        } else if (phase < 0.42) {
+          targetJawRotX = 0.52;
+          targetBrowLift = 0.235;
+        } else if (phase < 0.4) {
           targetJawRotX = 0.04;
+          targetBrowTilt = 0.22;
+          targetEarWiggle = -0.16;
           if (!bite2Triggered) {
             bite2Triggered = true;
-            wedge2.visible = false;
-            spawnCrumbBurst(0.78, 0.54);
+            burger.setStage(2);
+            spawnCrumbBurst(0.77, 0.54, 10);
+            cameraPunch = 0.12;
           }
         } else if (phase < 0.74) {
-          targetJawRotX = 0.08 + Math.abs(Math.sin((phase - 0.42) * 17)) * 0.22;
-          targetSquint = -0.05;
+          targetJawRotX = 0.07 + Math.abs(Math.sin((phase - 0.4) * 17)) * 0.22;
+          targetUpperLid = -0.42;
+          targetLowerLid = 0.08;
+          targetBurgerY = 0.44;
+          targetBurgerZ = 0.8;
+          targetBurgerRotX = 0.24;
+          targetBurgerRotY = -0.22;
+          targetEarWiggle = Math.sin((phase - 0.4) * 15) * 0.09;
         } else {
-          // Finishes the last piece!
+          // Final bite finishes the last crescent piece!
+          targetBurgerY = 0.76;
+          targetBurgerZ = 0.63;
           if (!bite3Triggered) {
             bite3Triggered = true;
-            wedge3.visible = false;
-            burgerGroup.visible = false;
-            spawnCrumbBurst(0.76, 0.52);
+            burger.setStage(3);
+            spawnCrumbBurst(0.76, 0.52, 8);
+            cameraPunch = 0.09;
           }
           targetJawRotX = 0.06 + Math.abs(Math.sin((phase - 0.74) * 18)) * 0.18;
-          targetSquint = 0.05;
-          targetLeftArmX = -0.15;
-          targetRightArmX = -0.5;
+          targetUpperLid = -0.46;
+          targetLowerLid = 0.1;
+          handsHoldBurger = false;
+          _handTargetL.set(-0.74, -0.22, 0.4);
+          _handTargetR.set(0.64, 0.28, 0.62);
         }
       } else {
-        // Scene 4: Finished & Satisfied Approval Gesture!
-        setScene(t < 3.4 ? 4 : 5);
-        burgerGroup.visible = false;
-        thumbUp.visible = true;
-        targetLeftArmX = 0.12;
-        targetLeftArmZ = -0.12;
-        targetRightArmX = -1.05;
-        targetRightArmZ = 0.18;
-        targetJawRotX = 0.05;
-        targetHeadRotX = -0.05 + Math.sin(t * 6) * 0.04; // approving nod
-        targetHeadRotY = -0.12;
-        targetSquint = -0.68;
-        targetCamZ = baseCamZ - 0.15;
+        // Scene 4: Proud TV-Commercial Thumbs-Up Approval Pose!
+        setScene(t < 3.55 ? 4 : 5);
+        burger.setStage(3);
+        handsHoldBurger = false;
+        _handTargetL.set(-0.76, -0.28, 0.36);
+        _handTargetR.set(0.6, 0.52, 0.64);
+        targetFingersCurl = 1.18; // Fist curl
+        targetThumbAngle = 0.22; // Proud extended thumb
+        targetRightHandYaw = -0.48;
+        targetJawRotX = 0.04;
+        targetHeadRotX = -0.05 + Math.sin(t * 7.5) * 0.055; // Approving nod
+        targetHeadRotY = -0.14;
+        targetEyePitch = -0.02;
+        targetEyeYaw = 0.12;
+        targetBrowLift = 0.23;
+        targetBrowTilt = 0.05;
+        targetCamZ = baseCamZ - 0.12;
         targetCamY = 0.78;
+        targetCamX = 0;
       }
 
-      // Smooth exponential damping (no abrupt snaps!)
-      const k = 12;
-      burgerGroup.position.y = THREE.MathUtils.damp(burgerGroup.position.y, targetBurgerY, k, dt);
-      burgerGroup.position.z = THREE.MathUtils.damp(burgerGroup.position.z, targetBurgerZ, k, dt);
-      burgerGroup.rotation.x = THREE.MathUtils.damp(burgerGroup.rotation.x, targetBurgerRotX, k, dt);
-      burgerGroup.rotation.y += dt * 0.45;
+      // Smooth exponential damping on burger, head, jaw, facial rig & camera
+      const k = 13;
+      burger.root.position.y = THREE.MathUtils.damp(burger.root.position.y, targetBurgerY, k, dt);
+      burger.root.position.z = THREE.MathUtils.damp(burger.root.position.z, targetBurgerZ, k, dt);
+      burger.root.rotation.x = THREE.MathUtils.damp(burger.root.rotation.x, targetBurgerRotX, k, dt);
+      burger.root.rotation.y = THREE.MathUtils.damp(burger.root.rotation.y, targetBurgerRotY, k, dt);
 
-      leftShoulder.rotation.x = THREE.MathUtils.damp(leftShoulder.rotation.x, targetLeftArmX, k, dt);
-      leftShoulder.rotation.z = THREE.MathUtils.damp(leftShoulder.rotation.z, targetLeftArmZ, k, dt);
-      rightShoulder.rotation.x = THREE.MathUtils.damp(rightShoulder.rotation.x, targetRightArmX, k, dt);
-      rightShoulder.rotation.z = THREE.MathUtils.damp(rightShoulder.rotation.z, targetRightArmZ, k, dt);
+      if (handsHoldBurger) {
+        _handTargetL.set(-0.4, burger.root.position.y - 0.02, burger.root.position.z + 0.01);
+        _handTargetR.set(0.4, burger.root.position.y - 0.02, burger.root.position.z + 0.01);
+      }
 
+      _currentHandL.x = THREE.MathUtils.damp(_currentHandL.x, _handTargetL.x, 14, dt);
+      _currentHandL.y = THREE.MathUtils.damp(_currentHandL.y, _handTargetL.y, 14, dt);
+      _currentHandL.z = THREE.MathUtils.damp(_currentHandL.z, _handTargetL.z, 14, dt);
+
+      _currentHandR.x = THREE.MathUtils.damp(_currentHandR.x, _handTargetR.x, 14, dt);
+      _currentHandR.y = THREE.MathUtils.damp(_currentHandR.y, _handTargetR.y, 14, dt);
+      _currentHandR.z = THREE.MathUtils.damp(_currentHandR.z, _handTargetR.z, 14, dt);
+
+      solveTwoBoneArm(
+        _shoulderL,
+        _currentHandL,
+        _poleL,
+        upperArmLen,
+        forearmLen,
+        upperArmL,
+        elbowJointL,
+        forearmL,
+        leftHand.group
+      );
+      solveTwoBoneArm(
+        _shoulderR,
+        _currentHandR,
+        _poleR,
+        upperArmLen,
+        forearmLen,
+        upperArmR,
+        elbowJointR,
+        forearmR,
+        rightHand.group
+      );
+
+      // Expressive hand fingers & thumb approval pose
+      rightHand.fingersPivot.rotation.x = THREE.MathUtils.damp(
+        rightHand.fingersPivot.rotation.x,
+        targetFingersCurl,
+        14,
+        dt
+      );
+      rightHand.thumbPivot.rotation.z = THREE.MathUtils.damp(
+        rightHand.thumbPivot.rotation.z,
+        targetThumbAngle,
+        14,
+        dt
+      );
+      rightHand.group.rotation.y = THREE.MathUtils.damp(
+        rightHand.group.rotation.y,
+        targetRightHandYaw,
+        12,
+        dt
+      );
+
+      // Facial expressions & head motion
       jawGroup.rotation.x = THREE.MathUtils.damp(jawGroup.rotation.x, targetJawRotX, 18, dt);
-      headGroup.rotation.x = THREE.MathUtils.damp(headGroup.rotation.x, targetHeadRotX, 10, dt);
-      headGroup.rotation.y = THREE.MathUtils.damp(headGroup.rotation.y, targetHeadRotY, 10, dt);
-      lidL.rotation.x = THREE.MathUtils.damp(lidL.rotation.x, targetSquint, 14, dt);
-      lidR.rotation.x = THREE.MathUtils.damp(lidR.rotation.x, targetSquint, 14, dt);
+      headGroup.rotation.x = THREE.MathUtils.damp(headGroup.rotation.x, targetHeadRotX, 11, dt);
+      headGroup.rotation.y = THREE.MathUtils.damp(headGroup.rotation.y, targetHeadRotY, 11, dt);
 
-      torsoGroup.position.y = 1.08 + Math.sin(t * 3.2) * 0.025;
-      bullRoot.rotation.y = Math.sin(t * 1.4) * 0.06;
+      eyeL.upperLid.rotation.x = THREE.MathUtils.damp(eyeL.upperLid.rotation.x, targetUpperLid, 15, dt);
+      eyeR.upperLid.rotation.x = THREE.MathUtils.damp(eyeR.upperLid.rotation.x, targetUpperLid, 15, dt);
+      eyeL.lowerLid.rotation.x = THREE.MathUtils.damp(eyeL.lowerLid.rotation.x, targetLowerLid, 15, dt);
+      eyeR.lowerLid.rotation.x = THREE.MathUtils.damp(eyeR.lowerLid.rotation.x, targetLowerLid, 15, dt);
 
-      camera.position.z = THREE.MathUtils.damp(camera.position.z, targetCamZ, 6, dt);
+      eyeL.aimPivot.rotation.x = THREE.MathUtils.damp(eyeL.aimPivot.rotation.x, targetEyePitch, 14, dt);
+      eyeR.aimPivot.rotation.x = THREE.MathUtils.damp(eyeR.aimPivot.rotation.x, targetEyePitch, 14, dt);
+      eyeL.aimPivot.rotation.y = THREE.MathUtils.damp(eyeL.aimPivot.rotation.y, targetEyeYaw, 14, dt);
+      eyeR.aimPivot.rotation.y = THREE.MathUtils.damp(eyeR.aimPivot.rotation.y, targetEyeYaw, 14, dt);
+
+      browL.position.y = THREE.MathUtils.damp(browL.position.y, targetBrowLift, 14, dt);
+      browR.position.y = THREE.MathUtils.damp(browR.position.y, targetBrowLift, 14, dt);
+      browL.rotation.z = THREE.MathUtils.damp(browL.rotation.z, -targetBrowTilt, 14, dt);
+      browR.rotation.z = THREE.MathUtils.damp(browR.rotation.z, targetBrowTilt, 14, dt);
+
+      earL.rotation.z = THREE.MathUtils.damp(earL.rotation.z, 1.24 + targetEarWiggle, 16, dt);
+      earR.rotation.z = THREE.MathUtils.damp(earR.rotation.z, -1.24 - targetEarWiggle, 16, dt);
+
+      // Subtle living breath & camera tracking
+      torsoGroup.position.y = 1.08 + Math.sin(t * 3.4) * 0.022;
+      bullRoot.rotation.y = Math.sin(t * 1.45) * 0.055;
+
+      camera.position.x = THREE.MathUtils.damp(camera.position.x, targetCamX, 6, dt);
       camera.position.y = THREE.MathUtils.damp(camera.position.y, targetCamY, 6, dt);
-      _tmpVec.set(0, 0.55, 0);
+      camera.position.z = THREE.MathUtils.damp(camera.position.z, targetCamZ - cameraPunch, 8, dt);
+      _tmpVec.set(0, 0.56, 0);
       camera.lookAt(_tmpVec);
 
-      // Update active flying crumbs with gravity
+      // Active flying 3D crumbs
       for (const c of crumbs) {
         if (!c.active) continue;
         c.life += dt;
@@ -973,26 +1056,22 @@ export function BullMascot({ onSceneChange }: BullMascotProps) {
           c.mesh.visible = false;
           continue;
         }
-        c.vy -= 5.8 * dt;
+        c.vy -= 5.9 * dt;
         c.mesh.position.x += c.vx * dt;
         c.mesh.position.y += c.vy * dt;
         c.mesh.position.z += c.vz * dt;
         c.mesh.rotation.x += c.rx * dt;
         c.mesh.rotation.y += c.ry * dt;
         const fade = Math.max(0, 1 - c.life / c.maxLife);
-        c.mesh.scale.setScalar(fade * 1.1);
+        c.mesh.scale.setScalar(fade * 1.08);
       }
 
-      // Update rising grill embers
+      // Rising golden grill embers
       for (let i = 0; i < emberCount; i++) {
         const s = emberSeeds[i];
-        const yOffset = ((t * s.speed + s.phase) % 2.8) - 1.1;
-        dummy.position.set(
-          s.x + Math.sin(t * 1.5 + s.phase) * 0.16,
-          yOffset,
-          s.z
-        );
-        const fadeScale = Math.sin(((yOffset + 1.1) / 2.8) * Math.PI) * s.scale;
+        const yOffset = ((t * s.speed + s.phase) % 2.9) - 1.1;
+        dummy.position.set(s.x + Math.sin(t * 1.5 + s.phase) * 0.16, yOffset, s.z);
+        const fadeScale = Math.sin(((yOffset + 1.1) / 2.9) * Math.PI) * s.scale;
         dummy.scale.setScalar(Math.max(0.01, fadeScale));
         dummy.updateMatrix();
         emberMesh.setMatrixAt(i, dummy.matrix);
@@ -1025,16 +1104,14 @@ export function BullMascot({ onSceneChange }: BullMascotProps) {
         }
       });
 
-      furBump.dispose();
-      apronCrestTex.dispose();
-      shadowTex.dispose();
+      textures.dispose();
       envTexture.dispose();
       renderer.dispose();
       if (canvas.parentNode === container) {
         container.removeChild(canvas);
       }
     };
-  }, [onSceneChange]);
+  }, []);
 
   if (webglFailed) {
     return (
