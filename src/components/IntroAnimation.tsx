@@ -28,28 +28,28 @@ export function IntroAnimation({ onComplete }: IntroAnimationProps) {
 
   const handleSkip = useCallback(() => {
     setIsSweeping(true);
-    window.setTimeout(finishIntro, 320);
+    window.setTimeout(finishIntro, 360);
   }, [finishIntro]);
 
   useEffect(() => {
     if (hasCustomVideo && !videoFailed) {
       const safetyTimer = window.setTimeout(() => {
         setIsSweeping(true);
-        window.setTimeout(finishIntro, 380);
+        window.setTimeout(finishIntro, 420);
       }, 4500);
       return () => window.clearTimeout(safetyTimer);
     }
 
-    const t1 = window.setTimeout(() => setScene(2), 850);
-    const t2 = window.setTimeout(() => setScene(3), 1850);
-    const t3 = window.setTimeout(() => setScene(4), 2850);
+    const t1 = window.setTimeout(() => setScene(2), 820);
+    const t2 = window.setTimeout(() => setScene(3), 1800);
+    const t3 = window.setTimeout(() => setScene(4), 2780);
     const t4 = window.setTimeout(() => {
       setScene(5);
       setIsSweeping(true);
-    }, 3450);
+    }, 3420);
     const t5 = window.setTimeout(() => {
       finishIntro();
-    }, 3950);
+    }, 3980);
 
     return () => {
       window.clearTimeout(t1);
@@ -65,19 +65,32 @@ export function IntroAnimation({ onComplete }: IntroAnimationProps) {
       className="fixed inset-0 h-[100dvh] z-50 flex flex-col items-center justify-center bg-[#080808] overflow-hidden select-none"
       initial={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+      transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
       aria-label="Introdução Touros Burguer"
     >
-      <button
+      {/* Subtle studio floor vignette */}
+      <div
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background:
+            'radial-gradient(circle at 50% 48%, rgba(255, 208, 0, 0.08) 0%, rgba(8, 8, 8, 0.92) 65%)',
+        }}
+        aria-hidden="true"
+      />
+
+      {/* Discreet Skip Button */}
+      <motion.button
         type="button"
         onClick={handleSkip}
-        className="fixed top-4 right-4 z-50 min-h-[44px] px-4 py-2 rounded-lg text-xs font-semibold tracking-wider uppercase text-[#A5A5A5] hover:text-white bg-[#141413]/80 border border-white/10 backdrop-blur-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FFD000] active:scale-[0.97]"
+        whileTap={{ scale: 0.95 }}
+        className="fixed top-4 right-4 z-50 min-h-[44px] px-4 py-2 rounded-lg text-xs font-semibold tracking-wider uppercase text-[#A5A5A5] hover:text-white bg-[#141413]/85 border border-white/10 backdrop-blur-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FFD000]"
         style={{ marginTop: 'env(safe-area-inset-top)' }}
       >
         Pular introdução
-      </button>
+      </motion.button>
 
-      <div className="relative flex flex-col items-center justify-center w-full max-w-md px-6">
+      {/* Main Intro Stage */}
+      <div className="relative z-10 flex flex-col items-center justify-center w-full max-w-md px-6">
         {hasCustomVideo && !videoFailed ? (
           <video
             className="w-72 h-72 sm:w-80 sm:h-80 object-contain"
@@ -86,7 +99,7 @@ export function IntroAnimation({ onComplete }: IntroAnimationProps) {
             playsInline
             onEnded={() => {
               setIsSweeping(true);
-              window.setTimeout(finishIntro, 380);
+              window.setTimeout(finishIntro, 420);
             }}
             onError={() => setVideoFailed(true)}
           >
@@ -101,12 +114,12 @@ export function IntroAnimation({ onComplete }: IntroAnimationProps) {
           <BullMascot scene={scene} />
         )}
 
-        {/* Logo Oficial abaixo da cena de abertura */}
+        {/* Official Logo Staging + Cinematic Progress Line */}
         <motion.div
-          className="mt-2 flex items-center justify-center"
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.15, ease: [0.16, 1, 0.3, 1] }}
+          className="mt-1 flex flex-col items-center"
+          initial={{ opacity: 0, y: 12, scale: 0.94 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ duration: 0.55, delay: 0.12, ease: [0.16, 1, 0.3, 1] }}
         >
           {!logoError ? (
             <img
@@ -114,27 +127,48 @@ export function IntroAnimation({ onComplete }: IntroAnimationProps) {
               alt="Touros Burguer"
               referrerPolicy="no-referrer"
               onError={() => setLogoError(true)}
-              className="w-36 sm:w-44 h-auto object-contain"
+              className="w-36 min-[390px]:w-40 sm:w-44 h-auto object-contain drop-shadow-[0_10px_24px_rgba(0,0,0,0.85)]"
             />
           ) : (
             <p className="font-display text-2xl sm:text-3xl tracking-wider text-white">
               TOUROS <span className="text-[#FFD000]">BURGUER</span>
             </p>
           )}
+
+          {/* Sleek 2px Progress Bar */}
+          <div className="mt-3 w-32 h-[2px] rounded-full bg-white/10 overflow-hidden">
+            <motion.div
+              className="h-full bg-[#FFD000]"
+              initial={{ scaleX: 0 }}
+              animate={{ scaleX: 1 }}
+              transition={{ duration: 3.45, ease: 'linear' }}
+              style={{ originX: 0 }}
+            />
+          </div>
         </motion.div>
       </div>
 
+      {/* Scene 5: Two-Stage Staggered Diagonal Brand Slash Transition */}
       <AnimatePresence>
         {isSweeping && (
-          <motion.div
-            className="fixed inset-0 z-50 pointer-events-none"
-            initial={{ x: '-105%' }}
-            animate={{ x: '105%' }}
-            transition={{ duration: 0.62, ease: [0.65, 0, 0.35, 1] }}
-            style={{
-              background: 'linear-gradient(105deg, #FFD000 0%, #FFDE24 55%, #FFD000 100%)',
-            }}
-          />
+          <>
+            <motion.div
+              className="fixed inset-y-0 -inset-x-24 z-50 pointer-events-none"
+              initial={{ x: '-110%', skewX: -12 }}
+              animate={{ x: '115%', skewX: -12 }}
+              transition={{ duration: 0.58, ease: [0.76, 0, 0.24, 1] }}
+              style={{
+                background:
+                  'linear-gradient(90deg, #FFD000 0%, #FFDE24 55%, #FFD000 100%)',
+              }}
+            />
+            <motion.div
+              className="fixed inset-y-0 -inset-x-24 z-50 pointer-events-none bg-[#080808]"
+              initial={{ x: '-115%', skewX: -12 }}
+              animate={{ x: '115%', skewX: -12 }}
+              transition={{ duration: 0.62, delay: 0.08, ease: [0.76, 0, 0.24, 1] }}
+            />
+          </>
         )}
       </AnimatePresence>
     </motion.div>
