@@ -40,23 +40,21 @@ export function IntroAnimation({ onComplete }: IntroAnimationProps) {
       return () => window.clearTimeout(safetyTimer);
     }
 
-    const t1 = window.setTimeout(() => setScene(2), 820);
-    const t2 = window.setTimeout(() => setScene(3), 1800);
-    const t3 = window.setTimeout(() => setScene(4), 2780);
-    const t4 = window.setTimeout(() => {
-      setScene(5);
+    const t1 = window.setTimeout(() => setScene(2), 950);
+    const t2 = window.setTimeout(() => setScene(3), 2050);
+    const t3 = window.setTimeout(() => {
+      setScene(4);
       setIsSweeping(true);
-    }, 3420);
-    const t5 = window.setTimeout(() => {
+    }, 3150);
+    const t4 = window.setTimeout(() => {
       finishIntro();
-    }, 3980);
+    }, 3750);
 
     return () => {
       window.clearTimeout(t1);
       window.clearTimeout(t2);
       window.clearTimeout(t3);
       window.clearTimeout(t4);
-      window.clearTimeout(t5);
     };
   }, [finishIntro, hasCustomVideo, videoFailed]);
 
@@ -73,7 +71,7 @@ export function IntroAnimation({ onComplete }: IntroAnimationProps) {
         className="pointer-events-none absolute inset-0"
         style={{
           background:
-            'radial-gradient(circle at 50% 48%, rgba(255, 208, 0, 0.08) 0%, rgba(8, 8, 8, 0.92) 65%)',
+            'radial-gradient(circle at 50% 46%, rgba(255, 208, 0, 0.08) 0%, rgba(8, 8, 8, 0.94) 68%)',
         }}
         aria-hidden="true"
       />
@@ -116,10 +114,10 @@ export function IntroAnimation({ onComplete }: IntroAnimationProps) {
 
         {/* Official Logo Staging + Cinematic Progress Line */}
         <motion.div
-          className="mt-1 flex flex-col items-center"
+          className="mt-2 flex flex-col items-center"
           initial={{ opacity: 0, y: 12, scale: 0.94 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
-          transition={{ duration: 0.55, delay: 0.12, ease: [0.16, 1, 0.3, 1] }}
+          transition={{ duration: 0.55, delay: 0.14, ease: [0.16, 1, 0.3, 1] }}
         >
           {!logoError ? (
             <img
@@ -127,7 +125,7 @@ export function IntroAnimation({ onComplete }: IntroAnimationProps) {
               alt="Touros Burguer"
               referrerPolicy="no-referrer"
               onError={() => setLogoError(true)}
-              className="w-36 min-[390px]:w-40 sm:w-44 h-auto object-contain drop-shadow-[0_10px_24px_rgba(0,0,0,0.85)]"
+              className="w-40 min-[390px]:w-44 sm:w-48 h-auto object-contain drop-shadow-[0_10px_24px_rgba(0,0,0,0.85)]"
             />
           ) : (
             <p className="font-display text-2xl sm:text-3xl tracking-wider text-white">
@@ -136,19 +134,19 @@ export function IntroAnimation({ onComplete }: IntroAnimationProps) {
           )}
 
           {/* Sleek 2px Progress Bar */}
-          <div className="mt-3 w-32 h-[2px] rounded-full bg-white/10 overflow-hidden">
+          <div className="mt-3.5 w-32 h-[2px] rounded-full bg-white/10 overflow-hidden">
             <motion.div
               className="h-full bg-[#FFD000]"
               initial={{ scaleX: 0 }}
               animate={{ scaleX: 1 }}
-              transition={{ duration: 3.45, ease: 'linear' }}
+              transition={{ duration: 3.15, ease: 'linear' }}
               style={{ originX: 0 }}
             />
           </div>
         </motion.div>
       </div>
 
-      {/* Scene 5: Two-Stage Staggered Diagonal Brand Slash Transition */}
+      {/* Staggered Diagonal Brand Slash Transition */}
       <AnimatePresence>
         {isSweeping && (
           <>

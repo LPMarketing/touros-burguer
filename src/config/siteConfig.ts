@@ -28,7 +28,8 @@ export const siteConfig = {
   copyright: 'TOUROS BURGUER © 2026',
   media: {
     logoSrc: '/assets/aistudio/logo_touros_b7e768ce.png',
-    heroBurgerSrc: '/assets/aistudio/sanduba_82ec5e87.jpeg',
+    heroBurgerSrc: '/assets/aistudio/Touros_Burguer_ao_entardecer_019752f9.png',
+    introBullImageSrc: '/src/assets/images/touro_burguer_cgi_1795050606546.jpg',
     locationPhotoSrc: '',
     introVideoWebmSrc: '',
     introVideoMp4Src: '',
