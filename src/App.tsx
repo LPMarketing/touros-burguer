@@ -3,7 +3,6 @@ import { AnimatePresence } from 'motion/react';
 import { siteConfig } from './config/siteConfig';
 import { IntroAnimation } from './components/IntroAnimation';
 import { HeroSection } from './components/HeroSection';
-import { BurgerShowcase } from './components/BurgerShowcase';
 import { LinksSection } from './components/LinksSection';
 import { LocationSection } from './components/LocationSection';
 import { InstagramFooter } from './components/InstagramFooter';
@@ -66,10 +65,9 @@ export default function App() {
       {/* Main Touros Burguer Hub — First-fold tuned for mobile Instagram browser */}
       <main className="relative z-10 w-full max-w-[460px] lg:max-w-5xl mx-auto px-4 min-[390px]:px-5 sm:px-6 lg:px-10 pt-safe pt-4 sm:pt-8 lg:py-14">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 min-[390px]:gap-6 lg:gap-12 items-start">
-          {/* Left Column (Mobile Top): Brand Hero + Featured Gourmet Burger */}
+          {/* Left Column (Mobile Top): Brand Hero */}
           <div className="lg:col-span-5 lg:sticky lg:top-12 space-y-4 min-[390px]:space-y-5 lg:space-y-6">
             <HeroSection ready={contentReady} reducedMotion={reducedMotion} />
-            <BurgerShowcase ready={contentReady} reducedMotion={reducedMotion} />
           </div>
 
           {/* Right Column: Action Links + Location Experience */}
