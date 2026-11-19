@@ -1,6 +1,22 @@
 {
   "rewrites": [
     {
+      "source": "/tourosburguer/assets/(.*)",
+      "destination": "/assets/$1"
+    },
+    {
+      "source": "/tourosburguer/images/(.*)",
+      "destination": "/images/$1"
+    },
+    {
+      "source": "/tourosburguer/intro/(.*)",
+      "destination": "/intro/$1"
+    },
+    {
+      "source": "/tourosburguer/favicon.svg",
+      "destination": "/favicon.svg"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

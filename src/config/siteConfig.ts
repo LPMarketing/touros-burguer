@@ -1,4 +1,6 @@
-export const MENU_URL = '';
+import { resolveAssetUrl } from '../utils/assetUrl';
+
+export const MENU_URL = 'https://touros-cardapio-amarelo.vercel.app/';
 
 const WHATSAPP_PRIMARY_NUMBER = '556296780208';
 const WHATSAPP_SECONDARY_NUMBER = '556298165295';
@@ -39,12 +41,14 @@ export const siteConfig = {
   copyright: 'TOUROS BURGUER © 2026',
   clicaeUrl: 'https://www.instagram.com/clicaebio/',
   media: {
-    logoSrc: '/assets/aistudio/logo_touros_b7e768ce.png',
-    heroBurgerSrc: '/assets/aistudio/Touros_Burguer_ao_entardecer_019752f9.png',
-    clicaeLogoSrc: '/assets/aistudio/WhatsApp_Image_2026-11-17_at_22.41.29_be5d0219.jpeg',
-    locationPhotoSrc: '',
-    introVideoWebmSrc: '',
-    introVideoMp4Src: '',
+    logoSrc: resolveAssetUrl('assets/aistudio/logo_touros_b7e768ce.png'),
+    heroBurgerSrc: resolveAssetUrl('assets/aistudio/Touros_Burguer_ao_entardecer_019752f9.png'),
+    clicaeLogoSrc: resolveAssetUrl(
+      'assets/aistudio/WhatsApp_Image_2026-11-17_at_22.41.29_be5d0219.jpeg'
+    ),
+    locationPhotoSrc: resolveAssetUrl(''),
+    introVideoWebmSrc: resolveAssetUrl(''),
+    introVideoMp4Src: resolveAssetUrl(''),
   },
   introStorageKey: 'touros_burguer_intro_seen_v1',
 } as const;
