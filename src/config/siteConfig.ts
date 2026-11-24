@@ -1,6 +1,6 @@
 import { resolveAssetUrl } from '../utils/assetUrl';
 
-export const MENU_URL = 'https://touros-cardapio-amarelo.vercel.app/';
+export const MENU_URL = 'https://clicae.com.br/tourosburguercardapio';
 
 const WHATSAPP_PRIMARY_NUMBER = '556296780208';
 const WHATSAPP_SECONDARY_NUMBER = '556298165295';
